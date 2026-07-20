@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DPV Flash Update Generator</title>
+    <meta name="description" content="Generate bi-weekly DPV flash updates for leadership. Upload Excel data, edit narrative, export HTML.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="form-panel">
+            <div class="form-header">
+                <h1>⚡ DPV Flash Update</h1>
+                <p class="subtitle">Bi-weekly leadership update generator</p>
+            </div>
+
+            <!-- Step indicator -->
+            <div class="steps">
+                <button class="step-btn active" data-step="1">1. Data</button>
+                <button class="step-btn" data-step="2">2. Narrative</button>
+                <button class="step-btn" data-step="3">3. Review</button>
+            </div>
+
+            <!-- STEP 1: Data Upload -->
+            <div class="step-content active" id="step-1">
+                <fieldset>
+                    <legend>Upload Data Source</legend>
+                    <div class="upload-zone" id="upload-zone">
+                        <div class="upload-icon">📊</div>
+                        <p>Drag & drop your Excel file here</p>
+                        <p class="upload-hint">or click to browse (.xlsx with tabs for each table)</p>
+                        <input type="file" id="file-input" accept=".xlsx,.xls,.csv" hidden>
+                    </div>
+                    <div id="file-status" class="file-status hidden">
+                        <span class="file-name"></span>
+                        <span class="file-sheets"></span>
+                        <button class="btn-ghost" onclick="clearFile()">✕ Remove</button>
+                    </div>
+                </fieldset>
+
+                <fieldset id="sheet-mapping" class="hidden">
+                    <legend>Map Sheets to Tables</legend>
+                    <p class="field-hint">Assign each sheet to the corresponding flash update table</p>
+                    <div class="field">
+                        <label>Table 1: De-risking Status</label>
+                        <select id="map-table1"><option value="">— Select sheet —</option></select>
+                    </div>
+                    <div class="field">
+                        <label>Table 2: Upcoming Enforcement</label>
+                        <select id="map-table2"><option value="">— Select sheet —</option></select>
+                    </div>
+                    <div class="field">
+                        <label>Table 3: SPs VoS Summary</label>
+                        <select id="map-table3"><option value="">— Select sheet —</option></select>
+                    </div>
+                    <div class="field">
+                        <label>Table 4: 3P Engagement Status</label>
+                        <select id="map-table4"><option value="">— Select sheet —</option></select>
+                    </div>
+                    <div class="field">
+                        <label>Table 5: 1P Engagement Status</label>
+                        <select id="map-table5"><option value="">— Select sheet —</option></select>
+                    </div>
+                    <div class="field">
+                        <label>Table 6: Feature Roadmap</label>
+                        <select id="map-table6"><option value="">— Select sheet —</option></select>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Update Metadata</legend>
+                    <div class="field-row two-col">
+                        <div class="field">
+                            <label for="update-week">Week Number</label>
+                            <input type="text" id="update-week" placeholder="e.g., WK16">
+                        </div>
+                        <div class="field">
+                            <label for="update-date">Date</label>
+                            <input type="date" id="update-date">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="bcc-list">BCC Distribution</label>
+                        <input type="text" id="bcc-list" value="dv-toys-flash@amazon.com" placeholder="Email alias">
+                    </div>
+                </fieldset>
+
+                <div class="step-actions">
+                    <button class="btn-primary" onclick="goToStep(2)">Next: Edit Narrative →</button>
+                </div>
+            </div>
+
+            <!-- STEP 2: Narrative Editing -->
+            <div class="step-content" id="step-2">
+                <fieldset>
+                    <legend>1. Program & Business Update</legend>
+                    <div class="field">
+                        <label for="narrative-program">Program narrative</label>
+                        <textarea id="narrative-program" rows="8" placeholder="The scope for Safety Controls via Direct Product Validation (DPV)..."></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="narrative-stakeholder">1.1 Industry Stakeholder Feedback</label>
+                        <textarea id="narrative-stakeholder" rows="5" placeholder="TIE (Toys Industries of Europe)..."></textarea>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>2. Current Status and Forecast</legend>
+                    <div class="field">
+                        <label for="narrative-toys">2.1 Children's Toys</label>
+                        <textarea id="narrative-toys" rows="6" placeholder="DPV EU scope is $X GMS..."></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="narrative-powerbanks">2.2 Power Banks</label>
+                        <textarea id="narrative-powerbanks" rows="5" placeholder="The DPV Power Banks program..."></textarea>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>3. Seller Sentiment (SSM)</legend>
+                    <div class="field">
+                        <label for="narrative-sentiment">Sentiment narrative</label>
+                        <textarea id="narrative-sentiment" rows="6" placeholder="For Toys, Seller Sentiment score in..."></textarea>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>4. Selling Partners Engagement Plan</legend>
+                    <div class="field">
+                        <label for="narrative-engagement-toys">4.1 Children's Toys</label>
+                        <textarea id="narrative-engagement-toys" rows="5" placeholder="On 3P side, CN Team is focusing on..."></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="narrative-engagement-pb">4.2 Power Banks</label>
+                        <textarea id="narrative-engagement-pb" rows="4" placeholder="$XMM GMS is non-compliant..."></textarea>
+                    </div>
+                </fieldset>
+
+                <div class="step-actions">
+                    <button class="btn-secondary" onclick="goToStep(1)">← Back</button>
+                    <button class="btn-primary" onclick="generateFlash()">Generate Flash Update →</button>
+                </div>
+            </div>
+
+            <!-- STEP 3: Review -->
+            <div class="step-content" id="step-3">
+                <fieldset>
+                    <legend>Final Review</legend>
+                    <p class="field-hint">Review the generated flash update in the preview panel. You can edit the narrative fields and regenerate, or export directly.</p>
+                    
+                    <div class="review-checklist">
+                        <label class="check-item"><input type="checkbox"> Numbers match latest data</label>
+                        <label class="check-item"><input type="checkbox"> Narrative is current</label>
+                        <label class="check-item"><input type="checkbox"> Tables render correctly</label>
+                        <label class="check-item"><input type="checkbox"> Distribution list is correct</label>
+                    </div>
+                </fieldset>
+
+                <div class="step-actions">
+                    <button class="btn-secondary" onclick="goToStep(2)">← Edit Narrative</button>
+                    <button class="btn-primary" onclick="copyToClipboard()">📋 Copy HTML</button>
+                    <button class="btn-secondary" onclick="downloadHtml()">💾 Download HTML</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main: Preview -->
+        <main class="preview-panel">
+            <div class="preview-toolbar">
+                <span class="preview-label">Flash Update Preview</span>
+                <div class="preview-actions">
+                    <button onclick="generateFlash()" title="Regenerate">🔄 Refresh</button>
+                    <button onclick="copyToClipboard()" title="Copy HTML to clipboard">📋 Copy</button>
+                    <button onclick="downloadHtml()" title="Download as HTML file">💾 Download</button>
+                </div>
+            </div>
+            <div class="preview-frame">
+                <iframe id="preview-iframe" title="Flash Update Preview"></iframe>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
