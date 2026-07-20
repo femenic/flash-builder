@@ -1,6 +1,6 @@
 # ⚡ DPV Flash Update Generator
 
-App client-side per generare flash updates bi-settimanali per la leadership DPV. Nessun backend richiesto — funziona interamente nel browser.
+App client-side per generare flash updates per la leadership DPV. Nessun backend richiesto — funziona interamente nel browser.
 
 ## Come usarla
 
