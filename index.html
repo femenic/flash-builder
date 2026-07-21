@@ -341,6 +341,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   <button class="btn btn-save" id="btnSave">💾 Save</button>
   <button class="btn btn-preview" id="btnPreview">▶ Preview</button>
   <span class="status" id="statusText"></span>
+  <button class="btn" id="btnHelp" style="background:#fff;color:#232f3e;font-weight:600;">❓ How to Use</button>
   <button class="btn btn-notify" id="btnNotifyOwners">📬 Notify Owners</button>
   <button class="btn btn-generate" id="btnGenerate">📧 Generate Email</button>
 </div>
@@ -417,6 +418,30 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 </div>
 </div>
 
+<div class="modal-bg" id="helpModal">
+  <div class="modal-content" style="max-width:600px;">
+    <div class="modal-toolbar"><span>❓ How to Use the Flash Builder</span><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border-color:rgba(255,255,255,0.3);" id="btnCloseHelp">✕ Close</button></div>
+    <div class="modal-body" style="padding:24px;font-size:14px;line-height:1.8;color:#333;">
+      <h3 style="margin:0 0 12px;color:#232f3e;">📝 Writing your section</h3>
+      <ol style="padding-left:20px;margin:0 0 20px;">
+        <li>Find your section (assigned by the owner tag next to your name)</li>
+        <li>Write your update in the text area — rough notes are fine</li>
+        <li>Click <strong>"✎ Rewrite (Amazon Style)"</strong> to get a polished version</li>
+        <li>Copy the rewrite into your text area if you like it, or edit manually</li>
+      </ol>
+      <h3 style="margin:0 0 12px;color:#232f3e;">💾 Saving your work</h3>
+      <p style="margin:0 0 12px;">Click <strong>"💾 Save"</strong> regularly to avoid losing your changes. Saving syncs your content to the cloud — all team members will see your updates in real time.</p>
+      <h3 style="margin:0 0 12px;color:#232f3e;">🟡 Updating the status flag</h3>
+      <p style="margin:0 0 12px;">Next to the owner name, use the dropdown to signal your progress:</p>
+      <ul style="padding-left:20px;margin:0 0 20px;">
+        <li><strong>⚪ Not Started</strong> — you haven't begun yet</li>
+        <li><strong>🟡 In Progress</strong> — you're working on it</li>
+        <li><strong>✅ Updated</strong> — your section is complete and ready for review</li>
+      </ul>
+      <p style="margin:0;background:#fffbea;border-left:4px solid #f6ad55;padding:10px 14px;border-radius:4px;font-size:13px;"><strong>⚠️ Remember:</strong> Always click Save after making changes. Set your status to "✅ Updated" when done so the team knows your section is ready.</p>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="previewModal">
   <div class="modal-content">
     <div class="modal-toolbar"><span>📧 Email Preview</span><div style="display:flex;gap:8px;"><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border-color:rgba(255,255,255,0.3);" id="btnCopy">📋 Copy HTML</button><button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border-color:rgba(255,255,255,0.3);" id="btnClose">✕ Close</button></div></div>
@@ -2530,6 +2555,9 @@ function rewriteNarrative(idx) {
     try { var ta = document.createElement("textarea"); ta.value = window._generatedHtml; ta.style.cssText = "position:fixed;left:-9999px;"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); showToast("\u2705 HTML copied!"); } catch(e) { showToast("\u26A0\uFE0F Open file directly to copy"); }
   });
   $("btnClose").addEventListener("click", function() { $("previewModal").classList.remove("show"); });
+  $("btnCloseHelp").addEventListener("click", function() { $("helpModal").classList.remove("show"); });
+  $("helpModal").addEventListener("click", function(e) { if (e.target === this) this.classList.remove("show"); });
+  $("btnHelp").addEventListener("click", function() { $("helpModal").classList.add("show"); });
   $("btnFlashViewClose").addEventListener("click", function() { $("flashViewModal").classList.remove("show"); });
   $("flashViewModal").addEventListener("click", function(e) { if (e.target === this) this.classList.remove("show"); });
   $("previewModal").addEventListener("click", function(e) { if (e.target === this) this.classList.remove("show"); });
