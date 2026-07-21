@@ -2,6 +2,20 @@
 <html lang="en"><head>
 <meta charset="UTF-8">
 <title>DPV Flash Builder</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+  firebase.initializeApp({
+    apiKey: "AIzaSyAdhYx9dE_LkxQJhYn97P20cGOWIZ0EFzA",
+    authDomain: "dpv-flash-builder.firebaseapp.com",
+    databaseURL: "https://dpv-flash-builder-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "dpv-flash-builder",
+    storageBucket: "dpv-flash-builder.firebasestorage.app",
+    messagingSenderId: "996688447392",
+    appId: "1:996688447392:web:48e60cd80b0a086567c6c5"
+  });
+  var fbDb = firebase.database();
+</script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f7f8fa; color: #333; line-height: 1.5; overflow: hidden; height: 100vh; }
@@ -432,7 +446,34 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
   var canStore = false;
   try { var t = window.localStorage; t.setItem("_t","1"); t.removeItem("_t"); canStore = true; } catch(e) {}
   function sGet(k) { try { if (canStore) { var v = window.localStorage.getItem(k); if (v) return v; } } catch(e){} return mem[k] || null; }
-  function sSet(k,v) { mem[k] = v; try { if (canStore) window.localStorage.setItem(k,v); } catch(e){} }
+  function sSet(k,v) { mem[k] = v; try { if (canStore) window.localStorage.setItem(k,v); } catch(e){} if (window.fbDb && k === "dpv_flash_current") { try { fbDb.ref("flash/current").set(v); } catch(e2){} } }
+  
+  // Firebase real-time sync: listen for changes from other users
+  var _fbListenerAttached = false;
+  var _lastFbWrite = 0;
+  function attachFirebaseListener() {
+    if (_fbListenerAttached || !window.fbDb) return;
+    _fbListenerAttached = true;
+    fbDb.ref("flash/current").on("value", function(snapshot) {
+      var now = Date.now();
+      // Ignore echoes from our own writes (within 3 seconds)
+      if (now - _lastFbWrite < 3000) return;
+      var val = snapshot.val();
+      if (!val) return;
+      try {
+        var newData = JSON.parse(val);
+        if (JSON.stringify(newData) !== JSON.stringify(data)) {
+          data = newData;
+          if (!data.flashLibrary) data.flashLibrary = [];
+          fullRender();
+          showToast("\u{1F504} Aggiornamento ricevuto da un collega");
+        }
+      } catch(e) {}
+    });
+  }
+  // Patch sSet to track our writes
+  var _origSSet = sSet;
+  sSet = function(k, v) { if (k === "dpv_flash_current") _lastFbWrite = Date.now(); _origSSet(k, v); };
   function esc(s) { if (!s) return ""; return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
   function $(id) { return document.getElementById(id); }
   function showToast(msg) { var t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); }, 3000); }
@@ -2776,6 +2817,15 @@ function rewriteNarrative(idx) {
   }
   fullRender();
   if (canStore) $("statusText").textContent = "\u2705 Saved";
+  // Attach Firebase real-time listener
+  attachFirebaseListener();
+  // Load from Firebase on first visit (if localStorage is empty)
+  if (!saved && window.fbDb) {
+    fbDb.ref("flash/current").once("value", function(snapshot) {
+      var val = snapshot.val();
+      if (val) { try { data = JSON.parse(val); if (!data.flashLibrary) data.flashLibrary = []; fullRender(); showToast("\u{2601}\uFE0F Dati caricati dal cloud"); } catch(e) {} }
+    });
+  }
 })();
 </script>
 
