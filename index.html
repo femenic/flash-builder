@@ -354,8 +354,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     </span>
     <label>Programme</label>
     <input type="text" id="programmeName" class="prog-input" value="EU Safety Controls Direct Product Validation">
-    <label>Total GMS</label>
-    <input type="text" id="gmsScope" class="gms-input" value="$6.3B">
   </div>
 
   <!-- Flash Library -->
@@ -496,6 +494,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     weekNumber: "27", yearNumber: "2026",
     headerEmoji: "\u{1F4CA}", programmeName: "EU Safety Controls Direct Product Validation",
     gmsScope: "$6.3B",
+    progControls: "Children's Toys, Power Banks, Edible Metal Foils, E-Mobility and Children's Sand Products",
     programmeNarrative: "", roadmapUpdates: "",
     inventoryOverview: "", inventoryMetrics: "",
     engagementItems: [],
@@ -828,6 +827,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         h += '<div class="metric-field"><label>Number of VoS</label><input type="text" data-field="ssmVosCount" value="' + esc(data.ssmVosCount || "") + '" placeholder="e.g. 184" /></div>';
         h += '</div>';
         h += '<button class="rewrite-btn" data-action="generateSsmNarrative" style="margin-top:8px;margin-bottom:8px;">&#9998; Generate SSM Narrative</button>';
+      }
+      // Programme metrics fields (Total GMS + Controls)
+      if (secId === "programme" && si === 0) {
+        h += '<div class="derisking-metrics" style="border-color:#1a73e8;">';
+        h += '<div class="metric-field"><label>Total Scope (GMS)</label><input type="text" data-field="progGmsScope" value="' + esc(data.gmsScope || "$6.3B") + '" placeholder="e.g. $6.3B" /></div>';
+        h += '<div class="metric-field" style="grid-column: span 3;"><label>Controls in Scope</label><input type="text" data-field="progControls" value="' + esc(data.progControls || "Children\'s Toys, Power Banks, Edible Metal Foils, E-Mobility and Children\'s Sand Products") + '" placeholder="e.g. Children\'s Toys, Power Banks..." /></div>';
+        h += '</div>';
+        h += '<button class="rewrite-btn" data-action="generateProgNarrative" style="margin-top:8px;margin-bottom:8px;">&#9998; Generate Programme Narrative</button>';
       }
       h += '<div class="narrative-section"><div class="field-group">';
       h += '<button class="rewrite-btn" data-action="rewriteSection" data-target="sub_' + secId + '_' + si + '">&#9998; Rewrite (Amazon Style)</button>';
@@ -1220,7 +1227,7 @@ function buildSectionBody(secId) {
     data.yearNumber = $("yearNumber").value;
     data.headerEmoji = $("headerEmoji").value;
     data.programmeName = $("programmeName").value;
-    data.gmsScope = $("gmsScope").value;
+    if ($("gmsScope")) data.gmsScope = $("gmsScope").value;
     var el;
     // Sync sub-section content to legacy fields for compatibility
     if (data.subSections && data.subSections.programme && data.subSections.programme.length > 0) {
@@ -1244,7 +1251,7 @@ function buildSectionBody(secId) {
     $("yearNumber").value = data.yearNumber || "2026";
     $("headerEmoji").value = data.headerEmoji || "\u{1F4CA}";
     $("programmeName").value = data.programmeName || "EU Safety Controls Direct Product Validation";
-    $("gmsScope").value = data.gmsScope || "$6.3B";
+    if ($("gmsScope")) $("gmsScope").value = data.gmsScope || "$6.3B";
   }
 
   function applySettings() {
@@ -1627,6 +1634,17 @@ function buildSectionBody(secId) {
       renderSections();
       showToast("\u2705 SSM narrative generated");
     }
+    else if (action === "generateProgNarrative") {
+      gather();
+      var gms = data.gmsScope || "$__B";
+      var controls = data.progControls || "[controls]";
+      var progNarrative = "The scope for Safety Controls via Direct Product Validation (DPV) for " + controls + " stands at " + gms + " GMS.";
+      if (data.subSections && data.subSections.programme && data.subSections.programme[0]) {
+        data.subSections.programme[0].content = progNarrative;
+      }
+      renderSections();
+      showToast("\u2705 Programme narrative generated");
+    }
     else if (action === "copySectionRewrite") { var target2 = t.getAttribute("data-target"); var rText = data["_rewritten_" + target2]; if (rText) { try { var ta3 = document.createElement("textarea"); ta3.value = rText; ta3.style.cssText = "position:fixed;left:-9999px;"; document.body.appendChild(ta3); ta3.select(); document.execCommand("copy"); document.body.removeChild(ta3); showToast("Copied!"); } catch(e3){} } }
     else if (action === "rewriteNarrative") { rewriteNarrative(idx); }
     else if (action === "copyNarrative") { var pl2 = data.productLines[idx]; if (pl2 && pl2.rewrittenNarrative) { try { var ta2 = document.createElement("textarea"); ta2.value = pl2.rewrittenNarrative; ta2.style.cssText = "position:fixed;left:-9999px;"; document.body.appendChild(ta2); ta2.select(); document.execCommand("copy"); document.body.removeChild(ta2); showToast("Narrative copied!"); } catch(e2){} } }
@@ -1916,6 +1934,8 @@ function buildSectionBody(secId) {
     else if (field === "ssmLastMonth") { data.ssmLastMonth = t.value; }
     else if (field === "ssmLastValue") { data.ssmLastValue = t.value; }
     else if (field === "ssmVosCount") { data.ssmVosCount = t.value; }
+    else if (field === "progGmsScope") { data.gmsScope = t.value; }
+    else if (field === "progControls") { data.progControls = t.value; }
     
     else if (field === "tblTitle") { if (data.appendixTables[idx]) data.appendixTables[idx].title = t.value; }
     else if (field === "tblRaw") { if (data.appendixTables[idx]) data.appendixTables[idx].raw = t.value; }
