@@ -323,9 +323,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .narrative-section { position: relative; }
 .narrative-section .rewrite-btn { position: absolute; top: 0; right: 0; padding: 4px 12px; font-size: 11px; border-radius: 4px; border: 1px solid #0d8043; background: #e6f4ea; color: #0d8043; cursor: pointer; font-weight: 600; }
 .narrative-section .rewrite-btn:hover { background: #ceead6; }
-.rewritten-output { background: #f0f8f4; border: 1px solid #b7dfca; border-radius: 4px; padding: 12px; margin-top: 8px; font-size: 13px; line-height: 1.6; color: #222; display: none; }
+.rewritten-output { background: #f0f8f4; border: 1px solid #b7dfca; border-radius: 4px; padding: 12px; margin-top: 8px; font-size: 13px; line-height: 1.6; color: #222; display: none; position: relative; }
 .rewritten-output.show { display: block; }
 .rewritten-output .copy-narrative { float: right; font-size: 11px; padding: 2px 8px; border-radius: 3px; border: 1px solid #0d8043; background: white; color: #0d8043; cursor: pointer; }
+.rewritten-output .close-rewrite { position: absolute; top: 6px; right: 6px; background: none; border: none; font-size: 16px; color: #999; cursor: pointer; padding: 2px 6px; line-height: 1; border-radius: 3px; }
+.rewritten-output .close-rewrite:hover { color: #c00; background: #fee; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -1711,6 +1713,7 @@ function buildSectionBody(secId) {
       }
     }
     else if (action === "copySectionRewrite") { var target2 = t.getAttribute("data-target"); var rText = data["_rewritten_" + target2]; if (rText) { try { var ta3 = document.createElement("textarea"); ta3.value = rText; ta3.style.cssText = "position:fixed;left:-9999px;"; document.body.appendChild(ta3); ta3.select(); document.execCommand("copy"); document.body.removeChild(ta3); showToast("Copied!"); } catch(e3){} } }
+    else if (action === "closeRewrite") { var target3 = t.getAttribute("data-target"); var outEl2 = $("rewritten_" + target3); if (outEl2) { outEl2.classList.remove("show"); outEl2.innerHTML = ""; } }
     else if (action === "rewriteNarrative") { rewriteNarrative(idx); }
     else if (action === "copyNarrative") { var pl2 = data.productLines[idx]; if (pl2 && pl2.rewrittenNarrative) { try { var ta2 = document.createElement("textarea"); ta2.value = pl2.rewrittenNarrative; ta2.style.cssText = "position:fixed;left:-9999px;"; document.body.appendChild(ta2); ta2.select(); document.execCommand("copy"); document.body.removeChild(ta2); showToast("Narrative copied!"); } catch(e2){} } }
     else if (action === "addEng") { data.engagementItems.push({ name: "New Category", content: "" }); renderEngagement(); }
@@ -2118,7 +2121,7 @@ function buildSectionBody(secId) {
     // Show the rewritten output
     var outEl = $("rewritten_" + targetId);
     if (outEl) {
-      outEl.innerHTML = '<button class="copy-narrative" data-action="copySectionRewrite" data-target="' + targetId + '">Copy</button><strong>Amazon-style rewrite:</strong><br><br>' + displayText;
+      outEl.innerHTML = '<button class="close-rewrite" data-action="closeRewrite" data-target="' + targetId + '">&times;</button><button class="copy-narrative" data-action="copySectionRewrite" data-target="' + targetId + '">Copy</button><strong>Amazon-style rewrite:</strong><br><br>' + displayText;
       outEl.classList.add("show");
     }
     data["_rewritten_" + targetId] = finalText;
