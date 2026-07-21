@@ -2106,65 +2106,93 @@ function buildSectionBody(secId) {
     var rawText = textEl.value || textEl.textContent || "";
     if (!rawText.trim()) { showToast("Write your rough notes first, then click Rewrite"); return; }
     
-    // Amazon-style rewrite rules:
-    // 1. Lead with data/metrics if present
-    // 2. Remove filler words (just, very, really, basically, actually)
-    // 3. Use active voice
-    // 4. Be specific and concise
-    // 5. End with clear next steps or actions if applicable
-    
     var text = rawText.trim();
     
-    // Remove common filler words
-    var fillers = ["just ", "very ", "really ", "basically ", "actually ", "simply ", "in order to ", "due to the fact that "];
-    for (var fi = 0; fi < fillers.length; fi++) {
-      var regex = new RegExp(fillers[fi], "gi");
-      text = text.replace(regex, "");
+    // --- Amazon-style rewrite engine ---
+    // Split into sentences
+    var rawSentences = text.split(/(?<=[.!?])\s+|[\n]+/).filter(function(s) { return s.trim().length > 0; });
+    
+    // Classify sentences: metrics-heavy vs context vs action
+    var metricSentences = [];
+    var contextSentences = [];
+    var actionSentences = [];
+    var metricPattern = /\$[\d.,]+[BMK]?|\d+[%]|\d+\.?\d*[BMK]\b|\d+[,.]?\d*\s*(GMS|ASINs|bps|units|sellers|vendors)/i;
+    var actionPattern = /\b(next step|action|plan|will |going to|target|aim|focus|priorit|driv|launch|escal|align|deliver)/i;
+    
+    for (var si = 0; si < rawSentences.length; si++) {
+      var sent = rawSentences[si].trim();
+      if (!sent) continue;
+      if (actionPattern.test(sent)) { actionSentences.push(sent); }
+      else if (metricPattern.test(sent)) { metricSentences.push(sent); }
+      else { contextSentences.push(sent); }
     }
     
-    // Replace weak openings
-    text = text.replace(/^(We are |We have been |There is |There are |It is |It has been )/i, "");
+    // Remove filler words from all sentences
+    var fillers = [/\bjust\b\s*/gi, /\bvery\b\s*/gi, /\breally\b\s*/gi, /\bbasically\b\s*/gi, /\bactually\b\s*/gi, /\bsimply\b\s*/gi, /\bin order to\b/gi, /\bdue to the fact that\b/gi, /\bat this point in time\b/gi, /\bgoing forward\b/gi, /\bas mentioned\b\s*/gi, /\bplease note that\b\s*/gi, /\bit is worth noting that\b\s*/gi, /\bit should be noted that\b\s*/gi];
     
-    // Clean up multiple spaces
-    text = text.replace(/  +/g, " ").trim();
-    
-    // Capitalize first letter
-    text = text.charAt(0).toUpperCase() + text.slice(1);
-    
-    // Ensure sentences end with periods
-    var sentences = text.split(/(?<=[.!?])\s+/);
-    for (var si = 0; si < sentences.length; si++) {
-      sentences[si] = sentences[si].trim();
-      if (sentences[si] && !/[.!?]$/.test(sentences[si])) {
-        sentences[si] += ".";
-      }
-      // Capitalize each sentence
-      if (sentences[si]) {
-        sentences[si] = sentences[si].charAt(0).toUpperCase() + sentences[si].slice(1);
-      }
+    function cleanSentence(s) {
+      for (var fi = 0; fi < fillers.length; fi++) { s = s.replace(fillers[fi], ""); }
+      // Fix weak openings
+      s = s.replace(/^(We are currently |We have been |There is |There are |It is important to note that |As you know,?\s*)/i, "");
+      // Replace passive voice patterns
+      s = s.replace(/\bis being done\b/gi, "is underway");
+      s = s.replace(/\bwas done\b/gi, "completed");
+      s = s.replace(/\bhas been completed\b/gi, "completed");
+      s = s.replace(/\bwill be done\b/gi, "is planned");
+      // Clean double spaces and capitalize
+      s = s.replace(/  +/g, " ").trim();
+      if (s) s = s.charAt(0).toUpperCase() + s.slice(1);
+      // Ensure ends with period
+      if (s && !/[.!?]$/.test(s)) s += ".";
+      return s;
     }
-    text = sentences.join(" ");
     
-    // Try to extract and front-load numbers/metrics
-    var metrics = text.match(/\$[\d.,]+[BMK]?|\d+[%]|\d+\.?\d*[BMK]\b/g);
-    if (metrics && metrics.length > 0) {
-      // Already has metrics — leave structure as-is but prefix with a summary line
-      var metricSummary = "Key metrics: " + metrics.slice(0, 3).join(", ") + ". ";
-      // Only add summary if text doesn't already start with a number
-      if (!/^[\$\d]/.test(text)) {
-        text = metricSummary + text;
-      }
+    metricSentences = metricSentences.map(cleanSentence).filter(function(s) { return s.length > 2; });
+    contextSentences = contextSentences.map(cleanSentence).filter(function(s) { return s.length > 2; });
+    actionSentences = actionSentences.map(cleanSentence).filter(function(s) { return s.length > 2; });
+    
+    // Rebuild: Data first, then context, then actions
+    var rewritten = [];
+    
+    // Lead with metrics/data
+    if (metricSentences.length > 0) {
+      rewritten = rewritten.concat(metricSentences);
     }
+    
+    // Add context
+    if (contextSentences.length > 0) {
+      rewritten = rewritten.concat(contextSentences);
+    }
+    
+    // End with actions/next steps (bold signal)
+    if (actionSentences.length > 0) {
+      rewritten = rewritten.concat(actionSentences);
+    }
+    
+    // If no restructuring was possible, just clean the original
+    if (rewritten.length === 0) {
+      rewritten = rawSentences.map(cleanSentence).filter(function(s) { return s.length > 2; });
+    }
+    
+    // Join with proper spacing
+    var finalText = rewritten.join(" ");
+    
+    // Bold key metrics in the display version
+    var displayText = esc(finalText);
+    displayText = displayText.replace(/(\$[\d.,]+[BMK]?M?)/g, '<strong>$1</strong>');
+    displayText = displayText.replace(/(\d+%)/g, '<strong>$1</strong>');
+    displayText = displayText.replace(/(\d+\.?\d*[BMK]\b)/g, '<strong>$1</strong>');
+    displayText = displayText.replace(/(GREEN|AMBER|RED|Green|Amber|Red)/g, '<strong>$1</strong>');
     
     // Show the rewritten output
     var outEl = $("rewritten_" + targetId);
     if (outEl) {
-      outEl.innerHTML = '<button class="copy-narrative" data-action="copySectionRewrite" data-target="' + targetId + '">Copy</button><strong>Amazon-style rewrite:</strong><br><br>' + esc(text);
+      outEl.innerHTML = '<button class="copy-narrative" data-action="copySectionRewrite" data-target="' + targetId + '">Copy</button><strong>Amazon-style rewrite:</strong><br><br>' + displayText;
       outEl.classList.add("show");
     }
     
-    // Store
-    data["_rewritten_" + targetId] = text;
+    // Store plain text version
+    data["_rewritten_" + targetId] = finalText;
   }
 
 function rewriteNarrative(idx) {
