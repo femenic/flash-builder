@@ -1229,6 +1229,11 @@ function buildSectionBody(secId) {
     data.headerEmoji = $("headerEmoji").value;
     data.programmeName = $("programmeName").value;
     if ($("gmsScope")) data.gmsScope = $("gmsScope").value;
+    // Gather programme metrics from DOM inputs if present
+    var progGmsInput = document.querySelector('[data-field="progGmsScope"]');
+    if (progGmsInput) data.gmsScope = progGmsInput.value;
+    var progCtrlInput = document.querySelector('[data-field="progControls"]');
+    if (progCtrlInput) data.progControls = progCtrlInput.value;
     var el;
     // Sync sub-section content to legacy fields for compatibility
     if (data.subSections && data.subSections.programme && data.subSections.programme.length > 0) {
