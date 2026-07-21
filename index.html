@@ -500,6 +500,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     inventoryOverview: "", inventoryMetrics: "",
     engagementItems: [],
     sentimentOverview: "", sentimentActions: "",
+    ssmCurrentMonth: "", ssmCurrentValue: "", ssmLastMonth: "", ssmLastValue: "", ssmVosCount: "",
     productLines: [],
     appendixTables: [],
     appendixNotes: "",
@@ -816,6 +817,17 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
         h += '<div class="metric-field"><label>Enforced (GMS)</label><input type="text" data-field="subEnfGms" data-sec="' + secId + '" data-idx="' + si + '" value="' + esc(sub.enforcedGms || "") + '" placeholder="e.g. $500M" /></div>';
         h += '<div class="metric-field"><label>Enforced (ASINs)</label><input type="text" data-field="subEnfAsins" data-sec="' + secId + '" data-idx="' + si + '" value="' + esc(sub.enforcedAsins || "") + '" placeholder="e.g. 1200" /></div>';
         h += '</div>';
+      }
+      // SSM metrics fields (Seller Sentiment)
+      if (secId === "sentiment" && si === 0) {
+        h += '<div class="derisking-metrics" style="border-color:#7b1fa2;">';
+        h += '<div class="metric-field"><label>Current Month</label><input type="text" data-field="ssmCurrentMonth" value="' + esc(data.ssmCurrentMonth || "") + '" placeholder="e.g. May\'26" /></div>';
+        h += '<div class="metric-field"><label>SSM Score (%)</label><input type="text" data-field="ssmCurrentValue" value="' + esc(data.ssmCurrentValue || "") + '" placeholder="e.g. 35%" /></div>';
+        h += '<div class="metric-field"><label>Previous Month</label><input type="text" data-field="ssmLastMonth" value="' + esc(data.ssmLastMonth || "") + '" placeholder="e.g. Apr\'26" /></div>';
+        h += '<div class="metric-field"><label>SSM Last Month (%)</label><input type="text" data-field="ssmLastValue" value="' + esc(data.ssmLastValue || "") + '" placeholder="e.g. 32.6%" /></div>';
+        h += '<div class="metric-field"><label>Number of VoS</label><input type="text" data-field="ssmVosCount" value="' + esc(data.ssmVosCount || "") + '" placeholder="e.g. 184" /></div>';
+        h += '</div>';
+        h += '<button class="rewrite-btn" data-action="generateSsmNarrative" style="margin-top:8px;margin-bottom:8px;">&#9998; Generate SSM Narrative</button>';
       }
       h += '<div class="narrative-section"><div class="field-group">';
       h += '<button class="rewrite-btn" data-action="rewriteSection" data-target="sub_' + secId + '_' + si + '">&#9998; Rewrite (Amazon Style)</button>';
@@ -1599,6 +1611,22 @@ function buildSectionBody(secId) {
     else if (action === "removeEng") { data.engagementItems.splice(idx, 1); renderEngagement(); }
     else if (action === "addPL") { data.productLines.push({ name: "New Product Line", status: "green", totalScope: "", preQual: "", outreach: "", deriskPct: "", goalPct: "80", enforcedGms: "", enforcedAsins: "", notes: "", tableRaw: "" }); renderProductLines(); }
     else if (action === "rewriteSection") { var target = t.getAttribute("data-target"); rewriteSection(target); }
+    else if (action === "generateSsmNarrative") {
+      gather();
+      var curMonth = data.ssmCurrentMonth || "[month]";
+      var curVal = parseFloat((data.ssmCurrentValue || "0").replace("%",""));
+      var lastVal = parseFloat((data.ssmLastValue || "0").replace("%",""));
+      var bpsDiff = Math.round((curVal - lastVal) * 100);
+      var bpsSign = bpsDiff >= 0 ? "+" : "";
+      var vos = data.ssmVosCount || "[X]";
+      var narrative = "For DPV, Seller Sentiment score in " + curMonth + " stood at " + curVal + "% (" + bpsSign + bpsDiff + " bps MoM), with " + vos + " Seller anecdotes";
+      // Put narrative into the first sentiment sub-section content
+      if (data.subSections && data.subSections.sentiment && data.subSections.sentiment[0]) {
+        data.subSections.sentiment[0].content = narrative;
+      }
+      renderSections();
+      showToast("\u2705 SSM narrative generated");
+    }
     else if (action === "copySectionRewrite") { var target2 = t.getAttribute("data-target"); var rText = data["_rewritten_" + target2]; if (rText) { try { var ta3 = document.createElement("textarea"); ta3.value = rText; ta3.style.cssText = "position:fixed;left:-9999px;"; document.body.appendChild(ta3); ta3.select(); document.execCommand("copy"); document.body.removeChild(ta3); showToast("Copied!"); } catch(e3){} } }
     else if (action === "rewriteNarrative") { rewriteNarrative(idx); }
     else if (action === "copyNarrative") { var pl2 = data.productLines[idx]; if (pl2 && pl2.rewrittenNarrative) { try { var ta2 = document.createElement("textarea"); ta2.value = pl2.rewrittenNarrative; ta2.style.cssText = "position:fixed;left:-9999px;"; document.body.appendChild(ta2); ta2.select(); document.execCommand("copy"); document.body.removeChild(ta2); showToast("Narrative copied!"); } catch(e2){} } }
@@ -1883,6 +1911,11 @@ function buildSectionBody(secId) {
     else if (field === "subGoalPct") { var ss8 = t.getAttribute("data-sec"); if (data.subSections && data.subSections[ss8]) data.subSections[ss8][idx].goalPct = t.value; }
     else if (field === "subEnfGms") { var ss9 = t.getAttribute("data-sec"); if (data.subSections && data.subSections[ss9]) data.subSections[ss9][idx].enforcedGms = t.value; }
     else if (field === "subEnfAsins") { var ss10 = t.getAttribute("data-sec"); if (data.subSections && data.subSections[ss10]) data.subSections[ss10][idx].enforcedAsins = t.value; }
+    else if (field === "ssmCurrentMonth") { data.ssmCurrentMonth = t.value; }
+    else if (field === "ssmCurrentValue") { data.ssmCurrentValue = t.value; }
+    else if (field === "ssmLastMonth") { data.ssmLastMonth = t.value; }
+    else if (field === "ssmLastValue") { data.ssmLastValue = t.value; }
+    else if (field === "ssmVosCount") { data.ssmVosCount = t.value; }
     
     else if (field === "tblTitle") { if (data.appendixTables[idx]) data.appendixTables[idx].title = t.value; }
     else if (field === "tblRaw") { if (data.appendixTables[idx]) data.appendixTables[idx].raw = t.value; }
