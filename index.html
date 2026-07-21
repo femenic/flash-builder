@@ -2093,7 +2093,6 @@ function buildSectionBody(secId) {
       var allTextareas = document.querySelectorAll('[data-field="engContent"][data-idx="' + engIdx + '"]');
       textEl = allTextareas[0];
     } else if (isSub) {
-      // sub_secId_idx format
       var subParts = targetId.substring(4).split("_");
       var subSec = subParts[0];
       var subIdx = subParts[1];
@@ -2106,83 +2105,15 @@ function buildSectionBody(secId) {
     var rawText = textEl.value || textEl.textContent || "";
     if (!rawText.trim()) { showToast("Write your rough notes first, then click Rewrite"); return; }
     
-    var text = rawText.trim();
-    
-    // --- Amazon-style rewrite engine ---
-    // Split into sentences
-    var rawSentences = text.split(/(?<=[.!?])\s+|[\n]+/).filter(function(s) { return s.trim().length > 0; });
-    
-    // Classify sentences: metrics-heavy vs context vs action
-    var metricSentences = [];
-    var contextSentences = [];
-    var actionSentences = [];
-    var metricPattern = /\$[\d.,]+[BMK]?|\d+[%]|\d+\.?\d*[BMK]\b|\d+[,.]?\d*\s*(GMS|ASINs|bps|units|sellers|vendors)/i;
-    var actionPattern = /\b(next step|action|plan|will |going to|target|aim|focus|priorit|driv|launch|escal|align|deliver)/i;
-    
-    for (var si = 0; si < rawSentences.length; si++) {
-      var sent = rawSentences[si].trim();
-      if (!sent) continue;
-      if (actionPattern.test(sent)) { actionSentences.push(sent); }
-      else if (metricPattern.test(sent)) { metricSentences.push(sent); }
-      else { contextSentences.push(sent); }
-    }
-    
-    // Remove filler words from all sentences
-    var fillers = [/\bjust\b\s*/gi, /\bvery\b\s*/gi, /\breally\b\s*/gi, /\bbasically\b\s*/gi, /\bactually\b\s*/gi, /\bsimply\b\s*/gi, /\bin order to\b/gi, /\bdue to the fact that\b/gi, /\bat this point in time\b/gi, /\bgoing forward\b/gi, /\bas mentioned\b\s*/gi, /\bplease note that\b\s*/gi, /\bit is worth noting that\b\s*/gi, /\bit should be noted that\b\s*/gi];
-    
-    function cleanSentence(s) {
-      for (var fi = 0; fi < fillers.length; fi++) { s = s.replace(fillers[fi], ""); }
-      // Fix weak openings
-      s = s.replace(/^(We are currently |We have been |There is |There are |It is important to note that |As you know,?\s*)/i, "");
-      // Replace passive voice patterns
-      s = s.replace(/\bis being done\b/gi, "is underway");
-      s = s.replace(/\bwas done\b/gi, "completed");
-      s = s.replace(/\bhas been completed\b/gi, "completed");
-      s = s.replace(/\bwill be done\b/gi, "is planned");
-      // Clean double spaces and capitalize
-      s = s.replace(/  +/g, " ").trim();
-      if (s) s = s.charAt(0).toUpperCase() + s.slice(1);
-      // Ensure ends with period
-      if (s && !/[.!?]$/.test(s)) s += ".";
-      return s;
-    }
-    
-    metricSentences = metricSentences.map(cleanSentence).filter(function(s) { return s.length > 2; });
-    contextSentences = contextSentences.map(cleanSentence).filter(function(s) { return s.length > 2; });
-    actionSentences = actionSentences.map(cleanSentence).filter(function(s) { return s.length > 2; });
-    
-    // Rebuild: Data first, then context, then actions
-    var rewritten = [];
-    
-    // Lead with metrics/data
-    if (metricSentences.length > 0) {
-      rewritten = rewritten.concat(metricSentences);
-    }
-    
-    // Add context
-    if (contextSentences.length > 0) {
-      rewritten = rewritten.concat(contextSentences);
-    }
-    
-    // End with actions/next steps (bold signal)
-    if (actionSentences.length > 0) {
-      rewritten = rewritten.concat(actionSentences);
-    }
-    
-    // If no restructuring was possible, just clean the original
-    if (rewritten.length === 0) {
-      rewritten = rawSentences.map(cleanSentence).filter(function(s) { return s.length > 2; });
-    }
-    
-    // Join with proper spacing
-    var finalText = rewritten.join(" ");
+    var finalText = amazonStyleRewrite(rawText);
     
     // Bold key metrics in the display version
     var displayText = esc(finalText);
     displayText = displayText.replace(/(\$[\d.,]+[BMK]?M?)/g, '<strong>$1</strong>');
     displayText = displayText.replace(/(\d+%)/g, '<strong>$1</strong>');
-    displayText = displayText.replace(/(\d+\.?\d*[BMK]\b)/g, '<strong>$1</strong>');
+    displayText = displayText.replace(/(\d+\.?\d*[BMK]\s)/g, '<strong>$1</strong>');
     displayText = displayText.replace(/(GREEN|AMBER|RED|Green|Amber|Red)/g, '<strong>$1</strong>');
+    displayText = displayText.replace(/\n/g, '<br>');
     
     // Show the rewritten output
     var outEl = $("rewritten_" + targetId);
@@ -2190,9 +2121,173 @@ function buildSectionBody(secId) {
       outEl.innerHTML = '<button class="copy-narrative" data-action="copySectionRewrite" data-target="' + targetId + '">Copy</button><strong>Amazon-style rewrite:</strong><br><br>' + displayText;
       outEl.classList.add("show");
     }
-    
-    // Store plain text version
     data["_rewritten_" + targetId] = finalText;
+  }
+
+  // --- Advanced Amazon-style Rewriter Engine ---
+  function amazonStyleRewrite(rawText) {
+    var text = rawText.trim();
+    
+    // Split into logical fragments (sentences, bullet points, line breaks)
+    var fragments = text.split(/(?<=[.!?])\s+|[\n]+|(?:^|\n)\s*[-•*]\s*/).filter(function(s) { return s.trim().length > 0; });
+    
+    // --- Step 1: Clean each fragment ---
+    var cleaned = [];
+    for (var i = 0; i < fragments.length; i++) {
+      var f = cleanFragment(fragments[i]);
+      if (f.length > 2) cleaned.push(f);
+    }
+    
+    // --- Step 2: Classify fragments ---
+    var metricPattern = /\$[\d.,]+[BMK]?|\d+[%]|\d+\.?\d*[BMK]\b|\d+[,.]?\d*\s*(GMS|ASINs|bps|units|sellers|vendors|SPs|TRFs)/i;
+    var actionPattern = /\b(next step|action|plan|will |going to|target|aim|focus|priorit|driv|launch|escal|align|deliver|expect|schedul|on track|ETA|by end of|timeline)/i;
+    var riskPattern = /\b(risk|blocker|challenge|concern|issue|gap|delay|miss|slip|escalat|impact)/i;
+    
+    var dataFrags = [];
+    var contextFrags = [];
+    var actionFrags = [];
+    var riskFrags = [];
+    
+    for (var ci = 0; ci < cleaned.length; ci++) {
+      var c = cleaned[ci];
+      if (riskPattern.test(c)) { riskFrags.push(c); }
+      else if (actionPattern.test(c)) { actionFrags.push(c); }
+      else if (metricPattern.test(c)) { dataFrags.push(c); }
+      else { contextFrags.push(c); }
+    }
+    
+    // --- Step 3: Build storyline with connectors ---
+    var paragraphs = [];
+    
+    // Opening: context (situation setting)
+    if (contextFrags.length > 0) {
+      var opening = contextFrags[0];
+      if (contextFrags.length > 1) {
+        opening = joinWithConnectors(contextFrags, "context");
+      }
+      paragraphs.push(opening);
+    }
+    
+    // Body: data/metrics
+    if (dataFrags.length > 0) {
+      var body = joinWithConnectors(dataFrags, "data");
+      paragraphs.push(body);
+    }
+    
+    // Risks (if any)
+    if (riskFrags.length > 0) {
+      var risks = joinWithConnectors(riskFrags, "risk");
+      paragraphs.push(risks);
+    }
+    
+    // Closing: actions/next steps
+    if (actionFrags.length > 0) {
+      var closing = joinWithConnectors(actionFrags, "action");
+      paragraphs.push(closing);
+    }
+    
+    // If classification didn't separate well, just clean and connect all
+    if (paragraphs.length === 0) {
+      paragraphs.push(joinWithConnectors(cleaned, "general"));
+    }
+    
+    // --- Step 4: Final grammar pass ---
+    var result = paragraphs.join("\n\n");
+    result = grammarPass(result);
+    
+    return result;
+  }
+  
+  function cleanFragment(s) {
+    s = s.trim();
+    // Remove filler words/phrases
+    var fillers = [
+      [/\bjust\s+/gi, ""], [/\bvery\s+/gi, ""], [/\breally\s+/gi, ""],
+      [/\bbasically\s*/gi, ""], [/\bactually\s*/gi, ""], [/\bsimply\s*/gi, ""],
+      [/\bin order to\b/gi, "to"], [/\bdue to the fact that\b/gi, "because"],
+      [/\bat this point in time\b/gi, "currently"], [/\bgoing forward\b/gi, ""],
+      [/\bas mentioned (earlier|above|before)?,?\s*/gi, ""],
+      [/\bplease note that\s*/gi, ""], [/\bit is worth noting that\s*/gi, ""],
+      [/\bit should be noted that\s*/gi, ""], [/\bas you know,?\s*/gi, ""],
+      [/\bin terms of\b/gi, "for"], [/\bwith regards? to\b/gi, "regarding"],
+      [/\ba lot of\b/gi, "significant"], [/\bkind of\b/gi, ""],
+      [/\bsort of\b/gi, ""], [/\bI think\s*/gi, ""],
+      [/\bwe believe that\s*/gi, ""], [/\bto be honest,?\s*/gi, ""]
+    ];
+    for (var fi = 0; fi < fillers.length; fi++) {
+      s = s.replace(fillers[fi][0], fillers[fi][1]);
+    }
+    // Fix weak openings
+    s = s.replace(/^(We are currently |We have been |There is |There are |It is |It has been |This is to )/i, "");
+    // Passive to active voice conversions
+    s = s.replace(/\bis being (done|worked on|addressed)\b/gi, "is underway");
+    s = s.replace(/\bwas completed\b/gi, "completed");
+    s = s.replace(/\bhas been completed\b/gi, "is complete");
+    s = s.replace(/\bwill be (done|completed)\b/gi, "is planned");
+    s = s.replace(/\bneeds to be (done|completed|addressed)\b/gi, "requires action");
+    s = s.replace(/\bis expected to be\b/gi, "is expected to");
+    // Clean double spaces
+    s = s.replace(/  +/g, " ").trim();
+    // Capitalize first letter
+    if (s) s = s.charAt(0).toUpperCase() + s.slice(1);
+    // Ensure ends with period
+    if (s && !/[.!?]$/.test(s)) s += ".";
+    return s;
+  }
+  
+  function joinWithConnectors(frags, type) {
+    if (frags.length === 0) return "";
+    if (frags.length === 1) return frags[0];
+    
+    var connectors = {
+      context: ["", " Furthermore, ", " Additionally, ", " In this context, ", " Specifically, "],
+      data: ["", " To date, ", " As a result, ", " In aggregate, ", " Specifically, ", " Overall, "],
+      action: ["", " In parallel, ", " Additionally, ", " As a next step, ", " Concurrently, "],
+      risk: ["", " Additionally, ", " A further consideration is that ", " Moreover, "],
+      general: ["", " Furthermore, ", " Additionally, ", " In parallel, ", " Specifically, "]
+    };
+    
+    var conns = connectors[type] || connectors.general;
+    var result = frags[0];
+    
+    for (var i = 1; i < frags.length; i++) {
+      var connector = conns[Math.min(i, conns.length - 1)];
+      var nextFrag = frags[i];
+      // Remove the period from the previous sentence if we're connecting
+      if (connector.trim()) {
+        // Start the connected sentence lowercase after connector
+        nextFrag = nextFrag.charAt(0).toLowerCase() + nextFrag.slice(1);
+      }
+      result += connector + nextFrag;
+    }
+    
+    return result;
+  }
+  
+  function grammarPass(text) {
+    // Fix common grammar issues
+    // Double periods
+    text = text.replace(/\.{2,}/g, ".");
+    // Space before period
+    text = text.replace(/\s+\./g, ".");
+    // No space after period (but not in numbers like 3.5)
+    text = text.replace(/\.([A-Z])/g, ". $1");
+    // Capitalize after period
+    text = text.replace(/\.\s+([a-z])/g, function(m, c) { return ". " + c.toUpperCase(); });
+    // Fix "a" vs "an" before vowels
+    text = text.replace(/\ba ([aeiou])/gi, function(m, v) { return "an " + v; });
+    text = text.replace(/\ban ([^aeiou\s])/gi, function(m, c) { return "a " + c; });
+    // Fix double "the the", "is is", etc.
+    text = text.replace(/\b(the|is|are|was|were|has|have|a|an|to|for|in|on|at|of)\s+\1\b/gi, "$1");
+    // Fix "  " double spaces
+    text = text.replace(/  +/g, " ");
+    // Fix capitalization after line breaks
+    text = text.replace(/\n\s*([a-z])/g, function(m, c) { return "\n" + c.toUpperCase(); });
+    // Ensure text starts with capital
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+    // Trim trailing whitespace
+    text = text.trim();
+    return text;
   }
 
 function rewriteNarrative(idx) {
