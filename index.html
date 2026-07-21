@@ -2226,6 +2226,59 @@ function buildSectionBody(secId) {
     s = s.replace(/\bwill be (done|completed)\b/gi, "is planned");
     s = s.replace(/\bneeds to be (done|completed|addressed)\b/gi, "requires action");
     s = s.replace(/\bis expected to be\b/gi, "is expected to");
+    // Business-style word upgrades
+    var upgrades = [
+      [/\bhelp(ed|ing)?\b/gi, function(m) { return m.replace(/help/i,"support"); }],
+      [/\buse\b/gi, "leverage"], [/\bused\b/gi, "leveraged"], [/\busing\b/gi, "leveraging"],
+      [/\bstart(ed)?\b/gi, function(m) { return m.replace(/start/i,"initiat"); }],
+      [/\bstarting\b/gi, "initiating"],
+      [/\bbig\b/gi, "significant"], [/\bsmall\b/gi, "limited"],
+      [/\bgood\b/gi, "strong"], [/\bbad\b/gi, "suboptimal"],
+      [/\bfix(ed|ing)?\b/gi, function(m) { return m.replace(/fix/i,"remediat"); }],
+      [/\bmake sure\b/gi, "ensure"], [/\bfind out\b/gi, "determine"],
+      [/\blook into\b/gi, "investigate"], [/\blooking into\b/gi, "investigating"],
+      [/\bset up\b/gi, "establish"], [/\bsetting up\b/gi, "establishing"],
+      [/\bget\b/gi, "obtain"], [/\bgetting\b/gi, "obtaining"], [/\bgot\b/gi, "obtained"],
+      [/\btalk(ed|ing)? (to|with)\b/gi, function(m) { return m.replace(/talk/i,"engag"); }],
+      [/\bask(ed|ing)?\b/gi, function(m) { return m.replace(/ask/i,"request"); }],
+      [/\bshow(ed|ing|s)?\b/gi, function(m) { return m.replace(/show/i,"demonstrat"); }],
+      [/\btry(ing)?\b/gi, function(m) { return m.replace(/try/i,"attempt"); }],
+      [/\btried\b/gi, "attempted"],
+      [/\bbuy\b/gi, "procure"], [/\bbuying\b/gi, "procuring"],
+      [/\bsend(ing)?\b/gi, function(m) { return m.replace(/send/i,"distribut"); }],
+      [/\bsent\b/gi, "distributed"],
+      [/\bkeep\b/gi, "maintain"], [/\bkeeping\b/gi, "maintaining"],
+      [/\bspeed up\b/gi, "accelerate"], [/\bspeeding up\b/gi, "accelerating"],
+      [/\bslow down\b/gi, "decelerate"],
+      [/\bcheck(ed|ing)?\b/gi, function(m) { return m.replace(/check/i,"verif"); }],
+      [/\bend\b/gi, "conclude"], [/\bending\b/gi, "concluding"], [/\bended\b/gi, "concluded"],
+      [/\bgo up\b/gi, "increase"], [/\bgoing up\b/gi, "increasing"], [/\bwent up\b/gi, "increased"],
+      [/\bgo down\b/gi, "decrease"], [/\bgoing down\b/gi, "decreasing"], [/\bwent down\b/gi, "decreased"],
+      [/\bcome up with\b/gi, "develop"], [/\bcame up with\b/gi, "developed"],
+      [/\bwork(ing)? on\b/gi, function(m) { return m.replace(/work/i,"progress"); }],
+      [/\bworked on\b/gi, "progressed on"],
+      [/\bproblem(s)?\b/gi, function(m) { return m.replace(/problem/i,"challenge"); }],
+      [/\bthing(s)?\b/gi, function(m) { return m.replace(/thing/i,"element"); }],
+      [/\babout\b/gi, "approximately"],
+      [/\bbefore\b/gi, "prior to"], [/\bafter\b/gi, "following"],
+      [/\bbecause of\b/gi, "driven by"],
+      [/\bbut\b/gi, "however"], [/\balso\b/gi, "additionally"],
+      [/\bso\b/gi, "consequently"], [/\bso far\b/gi, "to date"],
+      [/\bright now\b/gi, "currently"], [/\bsoon\b/gi, "in the near term"],
+      [/\blater\b/gi, "subsequently"], [/\bnow\b/gi, "at present"],
+      [/\benough\b/gi, "sufficient"], [/\bnot enough\b/gi, "insufficient"],
+      [/\bmostly\b/gi, "predominantly"], [/\bespecially\b/gi, "particularly"],
+      [/\bimportant\b/gi, "critical"], [/\bmain\b/gi, "primary"],
+      [/\bmore and more\b/gi, "increasingly"],
+      [/\bgive\b/gi, "provide"], [/\bgave\b/gi, "provided"], [/\bgiving\b/gi, "providing"],
+      [/\btell\b/gi, "inform"], [/\btold\b/gi, "informed"], [/\btelling\b/gi, "informing"],
+      [/\bneed(s)?\b/gi, function(m) { return m.replace(/need/i,"requir"); }],
+      [/\bneeded\b/gi, "required"],
+      [/\bwant(s)?\b/gi, function(m) { return m.replace(/want/i,"intend"); }]
+    ];
+    for (var ui = 0; ui < upgrades.length; ui++) {
+      s = s.replace(upgrades[ui][0], upgrades[ui][1]);
+    }
     // Clean double spaces
     s = s.replace(/  +/g, " ").trim();
     // Capitalize first letter
