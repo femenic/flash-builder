@@ -1681,12 +1681,13 @@ function buildSectionBody(secId) {
         // Status color word
         var statusWord = dStatus === "GREEN" ? "Green" : (dStatus === "AMBER" ? "Amber" : "Red");
         var wkLabel = "WK" + (data.weekNumber || "__");
-        var autoNarr = "DPV EU scope is " + dScope + " GMS and after pre-qualification (" + dPreQual + " GMS, " + preQualPct + "% of overall scope), we outreached " + dOutreach + " GMS.\nAs of " + wkLabel + ", we are " + statusWord + " (" + dPct + "% vs " + dGoal + "% goal) for the de-risking (TRF statuses \u201cApproved\u201d and \u201cIn Progress\u201d).\nTo date, we enforced " + dEnfGms + " GMS and " + dEnfAsins + " ASINs.";
+        var autoNarr = dTitle + " EU scope is " + dScope + " GMS and after pre-qualification (" + dPreQual + " GMS, " + preQualPct + "% of overall scope), we outreached " + dOutreach + " GMS.\nAs of " + wkLabel + ", we are " + statusWord + " (" + dPct + "% vs " + dGoal + "% goal) for the de-risking (TRF statuses \u201cApproved\u201d and \u201cIn Progress\u201d).\nTo date, we enforced " + dEnfGms + " GMS and " + dEnfAsins + " ASINs.";
         // Prepend auto-narrative to existing content (if any custom text follows)
         var existingContent = ds.content || "";
         // Check if content already starts with auto-generated text, replace it
-        var autoPrefix = "DPV EU scope is ";
-        if (existingContent.indexOf(autoPrefix) === 0) {
+        var autoPrefix = " EU scope is ";
+        var hasAutoNarr = existingContent.indexOf(autoPrefix) >= 0 && existingContent.indexOf(autoPrefix) < 40;
+        if (hasAutoNarr) {
           // Find where auto-narrative ends (after "ASINs.") and keep the rest
           var asinEnd = existingContent.indexOf("ASINs.");
           if (asinEnd > 0) {
