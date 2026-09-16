@@ -3081,23 +3081,10 @@ function rewriteNarrative(idx) {
         // Strip Excel class refs so no stale <style> rules interfere later
         node.removeAttribute("class");
       }
-      // Contrast fix: when getComputedStyle read the inherited dark text color
-      // (e.g. Excel white heading text defined via a class that didn't resolve
-      // inside our contenteditable), a dark cell background ends up with dark
-      // text. Detect low text/background contrast and force readable text.
-      var cells = tbl.querySelectorAll("td, th");
-      for (var ci = 0; ci < cells.length; ci++) {
-        var cell = cells[ci];
-        var ccs = window.getComputedStyle(cell);
-        var bg = parseRgb(ccs.getPropertyValue("background-color"));
-        var fg = parseRgb(ccs.getPropertyValue("color"));
-        if (!bg || !fg) continue;
-        var bgLum = luminance(bg), fgLum = luminance(fg);
-        // If background is dark and text isn't clearly light, force white text
-        if (bgLum < 0.5 && fgLum < 0.6) {
-          setInlineProp(cell, "color", "rgb(255, 255, 255)");
-        }
-      }
+      // Note: no automatic contrast adjustment. It caused false positives
+      // (e.g. black numbers on white cells getting forced to white when a cell
+      // background was misread as dark). Use the per-table formatting toolbar
+      // to fix any text color manually instead.
     }
     // Remove any leftover Excel <style> blocks now that styles are inlined
     var styleTags = container.querySelectorAll("style");
