@@ -2907,6 +2907,59 @@ function rewriteNarrative(idx) {
     }
   });
 
+  // Flatten computed styles onto every table element as inline styles.
+  // Excel copies formatting mostly via class-based <style> blocks; those
+  // classes collide across tables and get overridden by the app's own CSS
+  // when re-rendered in the preview. By reading getComputedStyle from the
+  // freshly-pasted (and thus fully-resolved) DOM and writing the values back
+  // as inline styles, the exact colors/fonts/borders/alignment travel with
+  // the HTML anywhere it's later injected.
+  function inlineExcelStyles(container) {
+    var STYLE_PROPS = [
+      "background-color", "color",
+      "font-family", "font-size", "font-weight", "font-style",
+      "text-align", "vertical-align", "text-decoration-line",
+      "border-top-width", "border-top-style", "border-top-color",
+      "border-right-width", "border-right-style", "border-right-color",
+      "border-bottom-width", "border-bottom-style", "border-bottom-color",
+      "border-left-width", "border-left-style", "border-left-color",
+      "padding-top", "padding-right", "padding-bottom", "padding-left",
+      "width", "height", "white-space"
+    ];
+    var tables = container.querySelectorAll("table");
+    for (var ti = 0; ti < tables.length; ti++) {
+      var tbl = tables[ti];
+      // Preserve Excel's structural attributes and force border-collapse
+      tbl.style.borderCollapse = "collapse";
+      var els = tbl.querySelectorAll("td, th, tr, col, colgroup, thead, tbody");
+      // Include the table itself
+      var all = [tbl];
+      for (var ei = 0; ei < els.length; ei++) all.push(els[ei]);
+      for (var ai = 0; ai < all.length; ai++) {
+        var node = all[ai];
+        var cs = window.getComputedStyle(node);
+        var inline = node.getAttribute("style") || "";
+        for (var pi = 0; pi < STYLE_PROPS.length; pi++) {
+          var prop = STYLE_PROPS[pi];
+          var val = cs.getPropertyValue(prop);
+          if (!val) continue;
+          // Skip transparent/zero-width borders to keep markup lean
+          if (prop.indexOf("border") === 0 && prop.indexOf("width") >= 0 && (val === "0px" || val === "0")) continue;
+          if (prop === "background-color" && (val === "rgba(0, 0, 0, 0)" || val === "transparent")) continue;
+          if (inline.indexOf(prop + ":") === -1) {
+            inline += (inline && inline.slice(-1) !== ";" ? ";" : "") + prop + ":" + val + ";";
+          }
+        }
+        node.setAttribute("style", inline);
+        // Strip Excel class refs so no stale <style> rules interfere later
+        node.removeAttribute("class");
+      }
+    }
+    // Remove any leftover Excel <style> blocks now that styles are inlined
+    var styleTags = container.querySelectorAll("style");
+    for (var si2 = 0; si2 < styleTags.length; si2++) styleTags[si2].parentNode.removeChild(styleTags[si2]);
+  }
+
   // Paste from Excel — captures rich HTML with full formatting
   document.addEventListener("paste", function(e) {
     var target = e.target;
@@ -2971,14 +3024,21 @@ function rewriteNarrative(idx) {
       
       // Store and display
       if (data.appendixTables[idx2]) {
-        data.appendixTables[idx2].htmlFormatted = cleanHtml;
+        // Render the raw Excel HTML into the live DOM first so the browser
+        // resolves Excel's <style> classes, then flatten every computed style
+        // to inline styles. This makes the formatting portable — it survives
+        // in the preview even though Excel's class-based <style> rules would
+        // otherwise collide between tables or be overridden by app CSS.
+        pasteDiv.innerHTML = cleanHtml;
+        try { inlineExcelStyles(pasteDiv); } catch (styleErr) {}
+        var flattened = pasteDiv.innerHTML;
+
+        data.appendixTables[idx2].htmlFormatted = flattened;
         data.appendixTables[idx2].useFormattedView = true;
         if (textData) {
           data.appendixTables[idx2].raw = textData;
           data.appendixTables[idx2].grid = parseRawToGrid(textData);
         }
-        // Display directly in the paste div
-        pasteDiv.innerHTML = cleanHtml;
         showToast("\u2705 Table pasted with colors, alignment & merged cells!");
       }
     } else if (textData) {
