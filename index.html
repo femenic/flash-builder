@@ -51,6 +51,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 /* Sections */
 .section { margin-bottom: 20px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background: #ffffff; }
 .section-header { padding: 12px 20px; color: white; font-size: 15px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+.sec-emoji-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 15px; line-height: 1; padding: 2px 5px; vertical-align: middle; }
+.sec-emoji-btn:hover { background: rgba(255,255,255,0.3); }
+.sec-color-lbl { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; border: 1px solid rgba(255,255,255,0.4); border-radius: 4px; background: rgba(255,255,255,0.15); cursor: pointer; overflow: hidden; }
+.sec-color-lbl:hover { background: rgba(255,255,255,0.3); }
+.sec-color-input { width: 34px; height: 34px; border: none; padding: 0; background: none; cursor: pointer; }
 .edit-title-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.85); cursor: pointer; font-size: 12px; padding: 2px 8px; margin-left: 10px; vertical-align: middle; border-radius: 3px; transition: all 0.2s; }
 .edit-title-btn:hover { background: rgba(255,255,255,0.25); color: white; border-color: rgba(255,255,255,0.6); }
 .owner-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 12px; vertical-align: middle; position: relative; flex-wrap: wrap; max-width: 350px; }
@@ -553,6 +558,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     appendixNotes: "",
     sectionOrder: ["programme","derisking","inventory","sentiment","engagement"],
     sectionTitles: {},
+    sectionColors: {},
+    sectionEmojis: {},
     sectionOwners: {},
     subSections: {},
     settings: { font: "Amazon Ember", fontSize: 13, headerColor: "#232f3e", accentColor: "#e37400", emailFont: "Amazon Ember", emailFontSize: 13 },
@@ -927,6 +934,18 @@ function buildSectionBody(secId) {
     return h;
   }
 
+  // Per-section color/emoji with user overrides falling back to SECTION defaults.
+  function secDefault(secId) {
+    for (var i = 0; i < SECTIONS.length; i++) { if (SECTIONS[i].id === secId) return SECTIONS[i]; }
+    return { color: "#607d8b", emoji: "\u{1F4C4}", title: secId };
+  }
+  function secColor(secId) {
+    return (data.sectionColors && data.sectionColors[secId]) || secDefault(secId).color;
+  }
+  function secEmoji(secId) {
+    return (data.sectionEmojis && data.sectionEmojis[secId]) || secDefault(secId).emoji;
+  }
+
   // --- Render sections ---
   function renderSections() {
     var container = $("sectionsContainer");
@@ -939,10 +958,12 @@ function buildSectionBody(secId) {
       var collapsed = data.collapsedSections[secId] || false;
       var addBtn = "";
       h += '<div class="section" data-section="' + secId + '">';
-      h += '<div class="section-header" style="background:' + sec.color + ';" data-action="toggleSection" data-sec="' + secId + '">';
+      h += '<div class="section-header" style="background:' + secColor(secId) + ';" data-action="toggleSection" data-sec="' + secId + '">';
       var secTitle = (data.sectionTitles && data.sectionTitles[secId]) ? data.sectionTitles[secId] : sec.title;
-      h += '<span class="left-side">' + sec.emoji + ' ' + secTitle + ' <button class="edit-title-btn" data-action="editSectionTitle" data-sec="' + secId + '">&#9998; Edit</button></span>';
-      h += '<span style="display:flex;align-items:center;gap:8px;"><button class="undo-btn" data-action="undoKey" data-undo-key="sec:' + secId + '" title="Undo last change in this section" disabled>&#8630; Undo</button>' + addBtn + '<span class="toggle-arrow' + (collapsed ? ' collapsed' : '') + '">&#9650;</span></span>';
+      h += '<span class="left-side"><button class="sec-emoji-btn" data-action="pickSecEmoji" data-sec="' + secId + '" title="Change emoji">' + secEmoji(secId) + '</button> ' + secTitle + ' <button class="edit-title-btn" data-action="editSectionTitle" data-sec="' + secId + '">&#9998; Edit</button></span>';
+      h += '<span style="display:flex;align-items:center;gap:8px;">';
+      h += '<label class="sec-color-lbl" title="Change section color"><input type="color" class="sec-color-input" data-action="secColorChange" data-sec="' + secId + '" value="' + secColor(secId) + '" /></label>';
+      h += '<button class="undo-btn" data-action="undoKey" data-undo-key="sec:' + secId + '" title="Undo last change in this section" disabled>&#8630; Undo</button>' + addBtn + '<span class="toggle-arrow' + (collapsed ? ' collapsed' : '') + '">&#9650;</span></span>';
       h += '</div>';
       var secStyle = "";
       if (data.sectionFormats && data.sectionFormats[secId]) {
@@ -1242,8 +1263,8 @@ function buildSectionBody(secId) {
       if (!sec) continue;
       h += '<div class="section-order-item" draggable="true" data-order-idx="' + i + '">';
       h += '<span class="drag-handle" title="Drag to reorder">&#9776;</span>';
-      h += '<span class="dot" style="background:' + sec.color + ';"></span>';
-      h += '<span>' + sec.emoji + '</span><span class="name">' + sec.title + '</span>';
+      h += '<span class="dot" style="background:' + secColor(secId) + ';"></span>';
+      h += '<span>' + secEmoji(secId) + '</span><span class="name">' + sec.title + '</span>';
       h += '<span class="arrows"><button data-action="moveUp" data-idx="' + i + '">&and;</button>';
       h += '<button data-action="moveDown" data-idx="' + i + '">&or;</button>';
       h += '<button data-action="removeSection" data-idx="' + i + '" class="remove-section-btn" title="Remove section">&times;</button></span></div>';
@@ -1560,7 +1581,7 @@ function buildSectionBody(secId) {
       if (!sec) continue;
       email += '<tr><td style="padding:0 24px 20px;"><table cellpadding="0" cellspacing="0" border="0" width="100%">';
       var emailSecTitle = (data.sectionTitles && data.sectionTitles[secId]) ? data.sectionTitles[secId] : sec.title;
-      email += '<tr><td style="background:' + sec.color + ';color:white;padding:10px 16px;font-size:15px;font-weight:600;">' + emailSecTitle + '</td></tr>';
+      email += '<tr><td style="background:' + secColor(secId) + ';color:white;padding:10px 16px;font-size:15px;font-weight:600;">' + secEmoji(secId) + ' ' + emailSecTitle + '</td></tr>';
       if (secId === "programme" || secId === "inventory" || secId === "sentiment") {
         // Render all dynamic sub-sections
         var eSubs = (data.subSections && data.subSections[secId]) || [];
@@ -1703,6 +1724,22 @@ function buildSectionBody(secId) {
     else if (action === "removeEng") { data.engagementItems.splice(idx, 1); renderEngagement(); }
     else if (action === "addPL") { data.productLines.push({ name: "New Product Line", status: "green", totalScope: "", preQual: "", outreach: "", deriskPct: "", goalPct: "80", enforcedGms: "", enforcedAsins: "", notes: "", tableRaw: "" }); renderProductLines(); }
     else if (action === "undoKey") { e.stopPropagation(); doUndoKey(t.getAttribute("data-undo-key")); return; }
+    else if (action === "pickSecEmoji") {
+      e.stopPropagation();
+      var emSec = t.getAttribute("data-sec");
+      if (!emSec) return;
+      var cur = secEmoji(emSec);
+      var val = prompt("Enter an emoji for this section (paste any emoji):", cur);
+      if (val !== null) {
+        val = val.trim();
+        pushUndo("sec:" + emSec, currentSnapshot());
+        if (!data.sectionEmojis) data.sectionEmojis = {};
+        if (val === "" || val === secDefault(emSec).emoji) delete data.sectionEmojis[emSec];
+        else data.sectionEmojis[emSec] = val;
+        gather(); renderSections(); renderSectionOrder();
+      }
+      return;
+    }
     else if (action === "rewriteSection") { var target = t.getAttribute("data-target"); rewriteSection(target); }
     else if (action === "generateSsmNarrative") {
       gather();
@@ -2018,6 +2055,10 @@ function buildSectionBody(secId) {
       inp.type = "text";
       inp.value = currentTitle || defTitle;
       inp.style.cssText = "font-size:14px;font-weight:600;color:#222;border:1px solid #fff;border-radius:3px;padding:2px 8px;width:300px;";
+      // Prevent clicks in the input from bubbling to the header (which would
+      // toggle/collapse the section and re-render, destroying this input).
+      inp.addEventListener("click", function(ev) { ev.stopPropagation(); });
+      inp.addEventListener("mousedown", function(ev) { ev.stopPropagation(); });
       leftSpan.innerHTML = "";
       leftSpan.appendChild(inp);
       inp.focus();
@@ -2084,6 +2125,15 @@ function buildSectionBody(secId) {
     // Handle col width select and formatting selects
     var act2 = t.getAttribute("data-action");
     if (act2 === "setColWidth") { var tIdx = parseInt(t.getAttribute("data-idx") || "0"); if (data.appendixTables[tIdx]) { data.appendixTables[tIdx].colWidth = t.value; renderAppendixTables(); } }
+    if (act2 === "secColorChange") {
+      var scSec = t.getAttribute("data-sec");
+      if (scSec) {
+        pushUndo("sec:" + scSec, currentSnapshot());
+        if (!data.sectionColors) data.sectionColors = {};
+        data.sectionColors[scSec] = t.value;
+        gather(); renderSections(); renderSectionOrder();
+      }
+    }
     if (act2 === "eftSize") { applyTableFormat(parseInt(t.getAttribute("data-idx") || "0"), "fontSizePx", t.value); }
     if (act2 === "eftTextColor") { applyTableFormat(parseInt(t.getAttribute("data-idx") || "0"), "foreColor", t.value); }
     if (act2 === "eftFillColor") { applyTableFormat(parseInt(t.getAttribute("data-idx") || "0"), "backColor", t.value); }
@@ -3059,6 +3109,12 @@ function rewriteNarrative(idx) {
     var b = e.target.closest && e.target.closest(".eft-btn, .eft-size");
     if (b) e.preventDefault();
   });
+
+  // Clicking the per-section color picker must not also toggle/collapse the
+  // section (both live inside the header). Stop the click from bubbling.
+  document.addEventListener("click", function(e) {
+    if (e.target.closest && e.target.closest(".sec-color-lbl, .sec-color-input")) e.stopPropagation();
+  }, true);
 
   // Remember the last text selection made inside a pasted table, so it survives
   // when focus moves to a toolbar button or the color picker (which would
