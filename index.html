@@ -24,6 +24,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .topbar .btn { border-radius: 4px; padding: 7px 14px; font-size: 13px; font-weight: 500; border: none; cursor: pointer; }
 .topbar 
 .topbar .btn-save { background: #3d4f5f; color: white; }
+.topbar #btnUndo:disabled { opacity: 0.4; cursor: default; }
 .topbar .btn-preview { background: #3d4f5f; color: white; }
 .topbar .btn-notify { background: #1a73e8; color: white; font-weight: 600; padding: 8px 14px; border-radius: 4px; }
 .btn-generate { background: #e37400; color: white; font-weight: 600; padding: 8px 18px; border-radius: 4px; margin-left: auto; }
@@ -351,6 +352,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <div class="topbar">
   <button class="btn btn-save" id="btnSave">💾 Save</button>
+  <button class="btn" id="btnUndo" title="Undo last change" style="background:#3d4f5f;color:white;">↶ Undo</button>
   <button class="btn btn-preview" id="btnPreview">▶ Preview</button>
   <span class="status" id="statusText"></span>
   <button class="btn" id="btnHelp" style="background:#fff;color:#232f3e;font-weight:600;">❓ How to Use</button>
@@ -1777,10 +1779,10 @@ function buildSectionBody(secId) {
     else if (action === "addEng") { data.engagementItems.push({ name: "New Category", content: "" }); renderEngagement(); }
     else if (action === "moveUp" && idx > 0) { var tmp = data.sectionOrder[idx]; data.sectionOrder[idx] = data.sectionOrder[idx-1]; data.sectionOrder[idx-1] = tmp; gather(); renderSections(); renderSectionOrder(); }
     else if (action === "addTable") { if (!data.appendixTables) data.appendixTables = []; data.appendixTables.push({ title: "Table " + (data.appendixTables.length + 1) + ": ", raw: "", grid: [], linkedProduct: null }); renderAppendixTables(); }
-    else if (action === "removeTable") { if (confirm("Delete this whole table?")) { data.appendixTables.splice(idx, 1); renderAppendixTables(); } }
-    else if (action === "clearTable") { var tblC = data.appendixTables[idx]; if (tblC) { tblC.raw = ""; tblC.grid = []; tblC.htmlFormatted = ""; tblC.useFormattedView = false; tblC.colAligns = []; tblC.colFontSizes = []; tblC.colBold = []; renderAppendixTables(); showToast("Table cleared \u2014 paste fresh data"); } }
-    else if (action === "moveTableUp" && idx > 0) { var mt = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx - 1, 0, mt); renderAppendixTables(); }
-    else if (action === "moveTableDown" && idx < data.appendixTables.length - 1) { var mtd = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx + 1, 0, mtd); renderAppendixTables(); }
+    else if (action === "removeTable") { if (confirm("Delete this whole table?")) { _undoLastSnapshot = null; pushUndo(); data.appendixTables.splice(idx, 1); renderAppendixTables(); } }
+    else if (action === "clearTable") { var tblC = data.appendixTables[idx]; if (tblC) { _undoLastSnapshot = null; pushUndo(); tblC.raw = ""; tblC.grid = []; tblC.htmlFormatted = ""; tblC.useFormattedView = false; tblC.colAligns = []; tblC.colFontSizes = []; tblC.colBold = []; renderAppendixTables(); showToast("Table cleared \u2014 paste fresh data"); } }
+    else if (action === "moveTableUp" && idx > 0) { _undoLastSnapshot = null; pushUndo(); var mt = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx - 1, 0, mt); renderAppendixTables(); }
+    else if (action === "moveTableDown" && idx < data.appendixTables.length - 1) { _undoLastSnapshot = null; pushUndo(); var mtd = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx + 1, 0, mtd); renderAppendixTables(); }
     else if (action === "eftBold") { applyTableFormat(idx, "bold"); }
     else if (action === "eftItalic") { applyTableFormat(idx, "italic"); }
     else if (action === "eftUnderline") { applyTableFormat(idx, "underline"); }
@@ -2582,6 +2584,16 @@ function rewriteNarrative(idx) {
   });
   $("btnPreview").addEventListener("click", generateEmail);
   $("btnSave").addEventListener("click", saveData);
+  $("btnUndo").addEventListener("click", doUndo);
+  // Ctrl+Z / Cmd+Z triggers the same global undo when not typing in a field
+  document.addEventListener("keydown", function(e) {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
+      var ae = document.activeElement;
+      var inEditable = ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT" || (ae.getAttribute && ae.getAttribute("contenteditable") === "true"));
+      // Let the browser handle undo inside a focused field; otherwise do global undo
+      if (!inEditable) { e.preventDefault(); doUndo(); }
+    }
+  });
   $("btnCopy").addEventListener("click", function() {
     if (!window._generatedHtml) return;
     try { var ta = document.createElement("textarea"); ta.value = window._generatedHtml; ta.style.cssText = "position:fixed;left:-9999px;"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); showToast("\u2705 HTML copied!"); } catch(e) { showToast("\u26A0\uFE0F Open file directly to copy"); }
@@ -2614,11 +2626,57 @@ function rewriteNarrative(idx) {
     }
   }, true);
 
+  // --- Undo history ---
+  // Snapshot the whole data model so a single Undo button can revert the last
+  // change anywhere — table formatting/edits and narrative text alike.
+  var _undoStack = [];
+  var _undoMax = 50;
+  var _undoLastSnapshot = null;
+
+  function currentSnapshot() { gather(); return JSON.stringify(data); }
+
+  // Push the state as it was BEFORE the change currently being made.
+  function pushUndo() {
+    var snap = _undoLastSnapshot;
+    if (snap == null) snap = currentSnapshot();
+    if (_undoStack.length === 0 || _undoStack[_undoStack.length - 1] !== snap) {
+      _undoStack.push(snap);
+      if (_undoStack.length > _undoMax) _undoStack.shift();
+    }
+    _undoLastSnapshot = null;
+    updateUndoButton();
+  }
+
+  function updateUndoButton() {
+    var b = $("btnUndo");
+    if (b) b.disabled = _undoStack.length === 0;
+  }
+
+  function doUndo() {
+    if (_undoStack.length === 0) { showToast("Nothing to undo"); return; }
+    var prev = _undoStack.pop();
+    try {
+      data = JSON.parse(prev);
+      if (!data.flashLibrary) data.flashLibrary = [];
+      _undoLastSnapshot = null;
+      fullRender();
+      sSet("dpv_flash_current", JSON.stringify(data));
+      showToast("\u21B6 Undone");
+    } catch (e) { showToast("\u26A0\uFE0F Undo failed"); }
+    updateUndoButton();
+  }
+
+  // Capture the pre-edit state as soon as the user starts interacting, so the
+  // snapshot reflects the state before this batch of edits.
+  document.addEventListener("focusin", function() {
+    if (_undoLastSnapshot == null) _undoLastSnapshot = currentSnapshot();
+  });
+
   // Auto-save
   var saveTimer = null;
   document.addEventListener("input", function() {
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(function() { gather(); sSet("dpv_flash_current", JSON.stringify(data)); }, 2000);
+    saveTimer = setTimeout(function() { pushUndo(); gather(); sSet("dpv_flash_current", JSON.stringify(data)); }, 2000);
   });
 
   // --- Contacts Manager ---
@@ -3005,6 +3063,8 @@ function rewriteNarrative(idx) {
       showToast("\u26A0\uFE0F Select text in this table first, then click");
       return;
     }
+    // Snapshot for undo before mutating the table
+    if (typeof pushUndo === "function") { _undoLastSnapshot = null; pushUndo(); }
     pasteDiv.focus();
     var sel = window.getSelection();
     sel.removeAllRanges();
@@ -3026,12 +3086,12 @@ function rewriteNarrative(idx) {
       // colors from descendants so the chosen color (e.g. white) actually shows.
       // Pass the saved range too: opening the native color picker can collapse
       // the live selection, so we rely on the captured range to find cells.
-      forceColorOnSelectedCells(pasteDiv, value, _lastTableSelection && _lastTableSelection.range);
+      forceStyleOnSelectedCells(pasteDiv, "color", value, _lastTableSelection && _lastTableSelection.range, true);
     } else if (cmd === "backColor") {
-      // backColor styles the text background (fill). hiliteColor is the alt name.
-      if (!document.execCommand("backColor", false, value)) {
-        document.execCommand("hiliteColor", false, value);
-      }
+      // Fill (background) color — apply directly to every selected cell so it
+      // covers full rows/columns and survives the native picker collapsing the
+      // selection (same reasoning as foreColor).
+      forceStyleOnSelectedCells(pasteDiv, "background-color", value, _lastTableSelection && _lastTableSelection.range, false);
     } else {
       document.execCommand(cmd, false, null);
     }
@@ -3076,7 +3136,7 @@ function rewriteNarrative(idx) {
   // selection, and clear any conflicting inline `color` on descendant nodes so
   // the color reliably applies (fixes white text staying grey because a nested
   // span/font kept its original color).
-  function forceColorOnSelectedCells(pasteDiv, color, savedRange) {
+  function forceStyleOnSelectedCells(pasteDiv, prop, value, savedRange, paintKids) {
     // Prefer the saved range (survives the native color picker); fall back to
     // the live selection.
     var range = savedRange || null;
@@ -3087,36 +3147,56 @@ function rewriteNarrative(idx) {
     if (!range) return;
 
     function paintCell(cell) {
-      cell.style.setProperty("color", color, "important");
-      var kids = cell.querySelectorAll("*");
-      for (var k = 0; k < kids.length; k++) {
-        if (kids[k].style) kids[k].style.setProperty("color", color, "important");
-        if (kids[k].tagName === "FONT" && kids[k].hasAttribute("color")) kids[k].setAttribute("color", color);
+      cell.style.setProperty(prop, value, "important");
+      if (paintKids) {
+        var kids = cell.querySelectorAll("*");
+        for (var k = 0; k < kids.length; k++) {
+          if (kids[k].style) kids[k].style.setProperty(prop, value, "important");
+          if (prop === "color" && kids[k].tagName === "FONT" && kids[k].hasAttribute("color")) kids[k].setAttribute("color", value);
+        }
       }
     }
 
-    var cells = pasteDiv.querySelectorAll("td, th");
-    var painted = false;
-    for (var i = 0; i < cells.length; i++) {
-      var cell = cells[i];
-      var hit = false;
-      try { hit = range.intersectsNode(cell); } catch (e) { hit = false; }
-      if (hit) { paintCell(cell); painted = true; }
-    }
-    // Fallback: use the cell that contains the range's common ancestor.
-    if (!painted) {
-      var node = range.commonAncestorContainer;
+    function cellOf(node) {
       while (node && node !== pasteDiv) {
-        if (node.tagName === "TD" || node.tagName === "TH") { paintCell(node); painted = true; break; }
+        if (node.tagName === "TD" || node.tagName === "TH") return node;
         node = node.parentNode;
       }
+      return null;
     }
-    // Last resort: if the range's ancestor is the whole table/row, paint the
-    // cells within the ancestor.
+
+    var allCells = pasteDiv.querySelectorAll("td, th");
+    var painted = false;
+
+    // 1) Primary: every cell the range intersects (works when the live
+    //    selection spans multiple cells and intersectsNode is supported).
+    for (var i = 0; i < allCells.length; i++) {
+      var hit = false;
+      try { hit = range.intersectsNode(allCells[i]); } catch (e) { hit = false; }
+      if (hit) { paintCell(allCells[i]); painted = true; }
+    }
+
+    // 2) If nothing hit (e.g. native picker collapsed the selection) OR only
+    //    one cell was hit, walk from the start cell to the end cell in document
+    //    order and paint the whole span — this covers full row/column selects.
+    var startCell = cellOf(range.startContainer);
+    var endCell = cellOf(range.endContainer);
+    if (startCell && endCell && startCell !== endCell) {
+      var started = false;
+      for (var c = 0; c < allCells.length; c++) {
+        if (allCells[c] === startCell) started = true;
+        if (started) { paintCell(allCells[c]); painted = true; }
+        if (allCells[c] === endCell) break;
+      }
+    } else if (!painted && startCell) {
+      paintCell(startCell); painted = true;
+    }
+
+    // 3) Last resort: paint cells within the range's common ancestor.
     if (!painted) {
       var anc = range.commonAncestorContainer;
-      if (anc.nodeType === 1) {
-        var innerCells = anc.querySelectorAll ? anc.querySelectorAll("td, th") : [];
+      if (anc.nodeType === 1 && anc.querySelectorAll) {
+        var innerCells = anc.querySelectorAll("td, th");
         for (var j = 0; j < innerCells.length; j++) paintCell(innerCells[j]);
       }
     }
@@ -3252,6 +3332,7 @@ function rewriteNarrative(idx) {
         try { inlineExcelStyles(pasteDiv); } catch (styleErr) {}
         var flattened = pasteDiv.innerHTML;
 
+        if (typeof pushUndo === "function") { _undoLastSnapshot = null; pushUndo(); }
         data.appendixTables[idx2].htmlFormatted = flattened;
         data.appendixTables[idx2].useFormattedView = true;
         if (textData) {
@@ -3424,6 +3505,7 @@ function rewriteNarrative(idx) {
     data.subSections.engagement = eSubs;
   }
   fullRender();
+  updateUndoButton();
   if (canStore) $("statusText").textContent = "\u2705 Saved";
   // Attach Firebase real-time listener
   attachFirebaseListener();
