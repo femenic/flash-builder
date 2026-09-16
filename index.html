@@ -292,7 +292,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .paste-excel-section { margin-bottom: 14px; }
 .paste-excel-header { margin-bottom: 6px; }
 .paste-excel-header label { font-size: 12px; font-weight: 600; color: #444; }
-.paste-excel-target { min-height: 80px; border: 2px dashed #bbb; border-radius: 6px; padding: 12px; background: white; overflow-x: auto; cursor: text; transition: border-color 0.2s; }
+.excel-fmt-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; background: #f5f6f8; border: 1px solid #e0e0e0; border-bottom: none; border-radius: 6px 6px 0 0; }
+.excel-fmt-toolbar .eft-hint { font-size: 11px; color: #888; margin-right: 4px; }
+.excel-fmt-toolbar .eft-btn { min-width: 28px; height: 28px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+.excel-fmt-toolbar .eft-btn:hover { background: #eef3ff; border-color: #1a73e8; }
+.excel-fmt-toolbar .eft-size { height: 28px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; padding: 0 4px; cursor: pointer; }
+.excel-fmt-toolbar .eft-color { display: inline-flex; align-items: center; gap: 2px; height: 28px; border: 1px solid #ccc; border-radius: 4px; padding: 0 5px; background: #fff; cursor: pointer; font-size: 13px; font-weight: 700; }
+.excel-fmt-toolbar .eft-color input[type="color"] { width: 20px; height: 20px; border: none; padding: 0; background: none; cursor: pointer; }
+.paste-excel-target { min-height: 80px; border: 2px dashed #bbb; border-radius: 0 0 6px 6px; padding: 12px; background: white; overflow-x: auto; cursor: text; transition: border-color 0.2s; }
 .paste-excel-target:focus { outline: none; border-color: #1a73e8; border-style: solid; }
 .paste-excel-target .paste-placeholder { color: #999; font-size: 13px; font-style: italic; }
 .paste-excel-target .excel-paste-content table { border-collapse: collapse; }
@@ -1050,6 +1057,20 @@ function buildSectionBody(secId) {
       h += '<div class="paste-excel-section">';
       h += '<div class="paste-excel-header"><label>Paste directly from Excel (preserves colors, alignment, merged cells):</label>';
       h += ' <button class="btn btn-sm" data-action="parseTblToProduct" data-idx="' + i + '" style="margin-left:8px;">Fill Metrics</button></div>';
+      // Text formatting toolbar (Excel-style) — select text in the table below, then apply
+      h += '<div class="excel-fmt-toolbar" data-idx="' + i + '">';
+      h += '<span class="eft-hint">Select text in the table, then format:</span>';
+      h += '<select class="eft-size" data-action="eftSize" data-idx="' + i + '" title="Font size">';
+      var sizes = ["8","9","10","11","12","14","16","18","20","24"];
+      for (var szi = 0; szi < sizes.length; szi++) h += '<option value="' + sizes[szi] + '"' + (sizes[szi] === "11" ? " selected" : "") + '>' + sizes[szi] + '</option>';
+      h += '</select>';
+      h += '<button class="eft-btn" data-action="eftBold" data-idx="' + i + '" title="Bold"><strong>B</strong></button>';
+      h += '<button class="eft-btn" data-action="eftItalic" data-idx="' + i + '" title="Italic"><em>I</em></button>';
+      h += '<button class="eft-btn" data-action="eftUnderline" data-idx="' + i + '" title="Underline"><u>U</u></button>';
+      h += '<label class="eft-color" title="Text color">A<input type="color" data-action="eftTextColor" data-idx="' + i + '" value="#000000" /></label>';
+      h += '<label class="eft-color eft-fill" title="Fill / background color">&#9632;<input type="color" data-action="eftFillColor" data-idx="' + i + '" value="#ffff00" /></label>';
+      h += '<button class="eft-btn" data-action="eftTextWhite" data-idx="' + i + '" title="White text">A<span style="color:#fff;background:#333;padding:0 3px;border-radius:2px;">W</span></button>';
+      h += '</div>';
       h += '<div class="paste-excel-target" contenteditable="true" data-action="pasteExcel" data-idx="' + i + '" id="pasteTarget_' + i + '">';
       if (tbl.htmlFormatted && tbl.useFormattedView) h += tbl.htmlFormatted;
       else h += '<span class="paste-placeholder">Click here and press Ctrl+V to paste from Excel...</span>';
@@ -1760,6 +1781,10 @@ function buildSectionBody(secId) {
     else if (action === "clearTable") { var tblC = data.appendixTables[idx]; if (tblC) { tblC.raw = ""; tblC.grid = []; tblC.htmlFormatted = ""; tblC.useFormattedView = false; tblC.colAligns = []; tblC.colFontSizes = []; tblC.colBold = []; renderAppendixTables(); showToast("Table cleared \u2014 paste fresh data"); } }
     else if (action === "moveTableUp" && idx > 0) { var mt = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx - 1, 0, mt); renderAppendixTables(); }
     else if (action === "moveTableDown" && idx < data.appendixTables.length - 1) { var mtd = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx + 1, 0, mtd); renderAppendixTables(); }
+    else if (action === "eftBold") { applyTableFormat(idx, "bold"); }
+    else if (action === "eftItalic") { applyTableFormat(idx, "italic"); }
+    else if (action === "eftUnderline") { applyTableFormat(idx, "underline"); }
+    else if (action === "eftTextWhite") { applyTableFormat(idx, "foreColor", "#ffffff"); }
     else if (action === "renderTableGrid") { var tbl = data.appendixTables[idx]; tbl.grid = parseRawToGrid(tbl.raw); renderAppendixTables(); }
     else if (action === "parseTblToProduct") { fillProductFromTable(idx); }
     else if (action === "toggleEditMode") { var tbl9 = data.appendixTables[idx]; if (tbl9) { tbl9.useFormattedView = false; renderAppendixTables(); } }
@@ -2052,6 +2077,9 @@ function buildSectionBody(secId) {
     // Handle col width select and formatting selects
     var act2 = t.getAttribute("data-action");
     if (act2 === "setColWidth") { var tIdx = parseInt(t.getAttribute("data-idx") || "0"); if (data.appendixTables[tIdx]) { data.appendixTables[tIdx].colWidth = t.value; renderAppendixTables(); } }
+    if (act2 === "eftSize") { applyTableFormat(parseInt(t.getAttribute("data-idx") || "0"), "fontSizePx", t.value); }
+    if (act2 === "eftTextColor") { applyTableFormat(parseInt(t.getAttribute("data-idx") || "0"), "foreColor", t.value); }
+    if (act2 === "eftFillColor") { applyTableFormat(parseInt(t.getAttribute("data-idx") || "0"), "backColor", t.value); }
     var act3 = t.getAttribute("data-action");
     if (act3 === "selectPrevFlash") {
       var sec7 = t.getAttribute("data-sec");
@@ -2572,6 +2600,20 @@ function rewriteNarrative(idx) {
     applySettings(); renderSectionOrder(); gather(); renderSections(); showToast("Reset to defaults");
   });
 
+  // Save manual edits made directly inside a pasted table (contenteditable),
+  // e.g. typing, or formatting via the toolbar. Fires when focus leaves the cell.
+  document.addEventListener("blur", function(e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains("paste-excel-target")) {
+      var pIdx = parseInt(t.getAttribute("data-idx") || "-1", 10);
+      if (pIdx >= 0 && data.appendixTables[pIdx] && t.querySelector("table")) {
+        data.appendixTables[pIdx].htmlFormatted = t.innerHTML;
+        data.appendixTables[pIdx].useFormattedView = true;
+        gather(); sSet("dpv_flash_current", JSON.stringify(data));
+      }
+    }
+  }, true);
+
   // Auto-save
   var saveTimer = null;
   document.addEventListener("input", function() {
@@ -2925,6 +2967,71 @@ function rewriteNarrative(idx) {
     inline = inline.replace(re, "$1");
     inline += (inline && inline.slice(-1) !== ";" ? ";" : "") + prop + ":" + value + ";";
     node.setAttribute("style", inline);
+  }
+
+  // Apply a formatting command to the current selection inside a pasted table.
+  // Uses execCommand for bold/italic/underline/colors (well supported), and a
+  // custom span-wrap for exact px font sizes. After applying, the updated HTML
+  // is saved back to the table so it persists and shows in the preview.
+  function applyTableFormat(idx, cmd, value) {
+    var pasteDiv = document.getElementById("pasteTarget_" + idx);
+    if (!pasteDiv) return;
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      showToast("\u26A0\uFE0F Select some text in the table first");
+      return;
+    }
+    // Make sure the selection is inside this table's editable area
+    var anchor = sel.anchorNode;
+    var within = false;
+    var n = anchor;
+    while (n) { if (n === pasteDiv) { within = true; break; } n = n.parentNode; }
+    if (!within) { showToast("\u26A0\uFE0F Select text inside this table first"); return; }
+
+    pasteDiv.focus();
+    try { document.execCommand("styleWithCSS", false, true); } catch (e) {}
+
+    if (cmd === "fontSizePx") {
+      // execCommand fontSize only supports 1-7; wrap selection in a span with exact px
+      wrapSelectionStyle("font-size", value + "px");
+    } else if (cmd === "foreColor") {
+      document.execCommand("foreColor", false, value);
+    } else if (cmd === "backColor") {
+      // backColor styles the text background (fill). hiliteColor is the alt name.
+      if (!document.execCommand("backColor", false, value)) {
+        document.execCommand("hiliteColor", false, value);
+      }
+    } else {
+      document.execCommand(cmd, false, null);
+    }
+
+    // Persist the edited HTML
+    if (data.appendixTables[idx]) {
+      data.appendixTables[idx].htmlFormatted = pasteDiv.innerHTML;
+      data.appendixTables[idx].useFormattedView = true;
+      gather(); sSet("dpv_flash_current", JSON.stringify(data));
+    }
+  }
+
+  // Wrap the current selection in a <span> carrying a single CSS declaration.
+  function wrapSelectionStyle(prop, val) {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    var range = sel.getRangeAt(0);
+    var span = document.createElement("span");
+    span.style.setProperty(prop, val);
+    try {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      // Reselect the wrapped content
+      sel.removeAllRanges();
+      var newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      sel.addRange(newRange);
+    } catch (e) {
+      // Fallback: surroundContents works only for simple ranges
+      try { range.surroundContents(span); } catch (e2) {}
+    }
   }
 
   // Flatten computed styles onto every table element as inline styles.
