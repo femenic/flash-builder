@@ -24,7 +24,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .topbar .btn { border-radius: 4px; padding: 7px 14px; font-size: 13px; font-weight: 500; border: none; cursor: pointer; }
 .topbar 
 .topbar .btn-save { background: #3d4f5f; color: white; }
-.topbar #btnUndo:disabled { opacity: 0.4; cursor: default; }
+.undo-btn { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.35); padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+.undo-btn:hover:not(:disabled) { background: rgba(255,255,255,0.35); }
+.undo-btn:disabled { opacity: 0.35; cursor: default; }
+.table-card-header .undo-btn { background: #eef1f5; color: #333; border-color: #ccc; }
+.table-card-header .undo-btn:hover:not(:disabled) { background: #e0e6ee; }
 .topbar .btn-preview { background: #3d4f5f; color: white; }
 .topbar .btn-notify { background: #1a73e8; color: white; font-weight: 600; padding: 8px 14px; border-radius: 4px; }
 .btn-generate { background: #e37400; color: white; font-weight: 600; padding: 8px 18px; border-radius: 4px; margin-left: auto; }
@@ -352,7 +356,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <div class="topbar">
   <button class="btn btn-save" id="btnSave">💾 Save</button>
-  <button class="btn" id="btnUndo" title="Undo last change" style="background:#3d4f5f;color:white;">↶ Undo</button>
   <button class="btn btn-preview" id="btnPreview">▶ Preview</button>
   <span class="status" id="statusText"></span>
   <button class="btn" id="btnHelp" style="background:#fff;color:#232f3e;font-weight:600;">❓ How to Use</button>
@@ -939,7 +942,7 @@ function buildSectionBody(secId) {
       h += '<div class="section-header" style="background:' + sec.color + ';" data-action="toggleSection" data-sec="' + secId + '">';
       var secTitle = (data.sectionTitles && data.sectionTitles[secId]) ? data.sectionTitles[secId] : sec.title;
       h += '<span class="left-side">' + sec.emoji + ' ' + secTitle + ' <button class="edit-title-btn" data-action="editSectionTitle" data-sec="' + secId + '">&#9998; Edit</button></span>';
-      h += '<span style="display:flex;align-items:center;gap:8px;">' + addBtn + '<span class="toggle-arrow' + (collapsed ? ' collapsed' : '') + '">&#9650;</span></span>';
+      h += '<span style="display:flex;align-items:center;gap:8px;"><button class="undo-btn" data-action="undoKey" data-undo-key="sec:' + secId + '" title="Undo last change in this section" disabled>&#8630; Undo</button>' + addBtn + '<span class="toggle-arrow' + (collapsed ? ' collapsed' : '') + '">&#9650;</span></span>';
       h += '</div>';
       var secStyle = "";
       if (data.sectionFormats && data.sectionFormats[secId]) {
@@ -948,17 +951,18 @@ function buildSectionBody(secId) {
         if (sfmt.fontSize && sfmt.fontSize !== "13") secStyle += "font-size:" + sfmt.fontSize + "px;";
         if (sfmt.bold) secStyle += "font-weight:700;";
       }
-      h += '<div class="section-body' + (collapsed ? ' collapsed' : '') + '"' + (secStyle ? ' style="' + secStyle + '"' : '') + '>' + buildSectionBody(secId) + '</div></div>';
+      h += '<div class="section-body' + (collapsed ? ' collapsed' : '') + '" data-undo-key="sec:' + secId + '"' + (secStyle ? ' style="' + secStyle + '"' : '') + '>' + buildSectionBody(secId) + '</div></div>';
     }
     h += '<div class="section"><div class="section-header" style="background:#607d8b;" data-action="toggleSection" data-sec="appendix">';
     h += '<span class="left-side">&#128203; Appendix - Tables</span>';
-    h += '<span style="display:flex;align-items:center;gap:8px;"><button class="add-btn" data-action="addTable">+ Add Table</button><span class="toggle-arrow">&#9650;</span></span>';
-    h += '</div><div class="section-body" id="appendixTablesContainer"></div></div>';
+    h += '<span style="display:flex;align-items:center;gap:8px;"><button class="undo-btn" data-action="undoKey" data-undo-key="appendix" title="Undo last change in the tables" disabled>&#8630; Undo</button><button class="add-btn" data-action="addTable">+ Add Table</button><span class="toggle-arrow">&#9650;</span></span>';
+    h += '</div><div class="section-body" id="appendixTablesContainer" data-undo-key="appendix"></div></div>';
     container.innerHTML = h;
     renderProductLines();
     renderEngagement();
     renderAppendixTables();
     populateFields();
+    if (typeof updateUndoButtons === "function") updateUndoButtons();
   }
 
   function populateFields() {
@@ -1698,6 +1702,7 @@ function buildSectionBody(secId) {
     if (action === "removePL") { if (data.productLines.length > 1) { data.productLines.splice(idx, 1); renderProductLines(); } }
     else if (action === "removeEng") { data.engagementItems.splice(idx, 1); renderEngagement(); }
     else if (action === "addPL") { data.productLines.push({ name: "New Product Line", status: "green", totalScope: "", preQual: "", outreach: "", deriskPct: "", goalPct: "80", enforcedGms: "", enforcedAsins: "", notes: "", tableRaw: "" }); renderProductLines(); }
+    else if (action === "undoKey") { e.stopPropagation(); doUndoKey(t.getAttribute("data-undo-key")); return; }
     else if (action === "rewriteSection") { var target = t.getAttribute("data-target"); rewriteSection(target); }
     else if (action === "generateSsmNarrative") {
       gather();
@@ -1779,10 +1784,10 @@ function buildSectionBody(secId) {
     else if (action === "addEng") { data.engagementItems.push({ name: "New Category", content: "" }); renderEngagement(); }
     else if (action === "moveUp" && idx > 0) { var tmp = data.sectionOrder[idx]; data.sectionOrder[idx] = data.sectionOrder[idx-1]; data.sectionOrder[idx-1] = tmp; gather(); renderSections(); renderSectionOrder(); }
     else if (action === "addTable") { if (!data.appendixTables) data.appendixTables = []; data.appendixTables.push({ title: "Table " + (data.appendixTables.length + 1) + ": ", raw: "", grid: [], linkedProduct: null }); renderAppendixTables(); }
-    else if (action === "removeTable") { if (confirm("Delete this whole table?")) { _undoLastSnapshot = null; pushUndo(); data.appendixTables.splice(idx, 1); renderAppendixTables(); } }
-    else if (action === "clearTable") { var tblC = data.appendixTables[idx]; if (tblC) { _undoLastSnapshot = null; pushUndo(); tblC.raw = ""; tblC.grid = []; tblC.htmlFormatted = ""; tblC.useFormattedView = false; tblC.colAligns = []; tblC.colFontSizes = []; tblC.colBold = []; renderAppendixTables(); showToast("Table cleared \u2014 paste fresh data"); } }
-    else if (action === "moveTableUp" && idx > 0) { _undoLastSnapshot = null; pushUndo(); var mt = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx - 1, 0, mt); renderAppendixTables(); }
-    else if (action === "moveTableDown" && idx < data.appendixTables.length - 1) { _undoLastSnapshot = null; pushUndo(); var mtd = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx + 1, 0, mtd); renderAppendixTables(); }
+    else if (action === "removeTable") { if (confirm("Delete this whole table?")) { pushUndo("appendix", currentSnapshot()); data.appendixTables.splice(idx, 1); renderAppendixTables(); } }
+    else if (action === "clearTable") { var tblC = data.appendixTables[idx]; if (tblC) { pushUndo("appendix", currentSnapshot()); tblC.raw = ""; tblC.grid = []; tblC.htmlFormatted = ""; tblC.useFormattedView = false; tblC.colAligns = []; tblC.colFontSizes = []; tblC.colBold = []; renderAppendixTables(); showToast("Table cleared \u2014 paste fresh data"); } }
+    else if (action === "moveTableUp" && idx > 0) { pushUndo("appendix", currentSnapshot()); var mt = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx - 1, 0, mt); renderAppendixTables(); }
+    else if (action === "moveTableDown" && idx < data.appendixTables.length - 1) { pushUndo("appendix", currentSnapshot()); var mtd = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx + 1, 0, mtd); renderAppendixTables(); }
     else if (action === "eftBold") { applyTableFormat(idx, "bold"); }
     else if (action === "eftItalic") { applyTableFormat(idx, "italic"); }
     else if (action === "eftUnderline") { applyTableFormat(idx, "underline"); }
@@ -2584,14 +2589,15 @@ function rewriteNarrative(idx) {
   });
   $("btnPreview").addEventListener("click", generateEmail);
   $("btnSave").addEventListener("click", saveData);
-  $("btnUndo").addEventListener("click", doUndo);
-  // Ctrl+Z / Cmd+Z triggers the same global undo when not typing in a field
+  // Ctrl+Z / Cmd+Z undoes the focused area (section/table) when not typing in a field
   document.addEventListener("keydown", function(e) {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "z" || e.key === "Z")) {
       var ae = document.activeElement;
       var inEditable = ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT" || (ae.getAttribute && ae.getAttribute("contenteditable") === "true"));
-      // Let the browser handle undo inside a focused field; otherwise do global undo
-      if (!inEditable) { e.preventDefault(); doUndo(); }
+      if (!inEditable) {
+        var key = undoKeyFor(ae) || undoKeyFor(document.querySelector(":hover"));
+        if (key) { e.preventDefault(); doUndoKey(key); }
+      }
     }
   });
   $("btnCopy").addEventListener("click", function() {
@@ -2626,57 +2632,77 @@ function rewriteNarrative(idx) {
     }
   }, true);
 
-  // --- Undo history ---
-  // Snapshot the whole data model so a single Undo button can revert the last
-  // change anywhere — table formatting/edits and narrative text alike.
-  var _undoStack = [];
+  // --- Undo history (per section / per table) ---
+  // Each editable area has its own undo key (e.g. "sec:derisking", "appendix").
+  // A snapshot is the whole data model, but stored under the key of the area
+  // being edited, so each section's Undo button reverts only that area's last
+  // change (in practice edits are localized to the focused area).
+  var _undoStacks = {};        // key -> array of JSON snapshots
   var _undoMax = 50;
-  var _undoLastSnapshot = null;
+  var _undoPending = {};       // key -> snapshot captured before the current edit batch
 
   function currentSnapshot() { gather(); return JSON.stringify(data); }
 
-  // Push the state as it was BEFORE the change currently being made.
-  function pushUndo() {
-    var snap = _undoLastSnapshot;
-    if (snap == null) snap = currentSnapshot();
-    if (_undoStack.length === 0 || _undoStack[_undoStack.length - 1] !== snap) {
-      _undoStack.push(snap);
-      if (_undoStack.length > _undoMax) _undoStack.shift();
+  // Resolve the undo key for a DOM node (walks up to the nearest area marker).
+  function undoKeyFor(node) {
+    while (node && node.getAttribute) {
+      var k = node.getAttribute("data-undo-key");
+      if (k) return k;
+      node = node.parentNode;
     }
-    _undoLastSnapshot = null;
-    updateUndoButton();
+    return null;
   }
 
-  function updateUndoButton() {
-    var b = $("btnUndo");
-    if (b) b.disabled = _undoStack.length === 0;
+  // Record the state BEFORE an edit under a key. Called explicitly by table
+  // actions, and via focusin for typed edits.
+  function pushUndo(key, preSnapshot) {
+    if (!key) return;
+    var snap = (preSnapshot != null) ? preSnapshot : (_undoPending[key] != null ? _undoPending[key] : currentSnapshot());
+    if (!_undoStacks[key]) _undoStacks[key] = [];
+    var stk = _undoStacks[key];
+    if (stk.length === 0 || stk[stk.length - 1] !== snap) {
+      stk.push(snap);
+      if (stk.length > _undoMax) stk.shift();
+    }
+    _undoPending[key] = null;
+    updateUndoButtons(key);
   }
 
-  function doUndo() {
-    if (_undoStack.length === 0) { showToast("Nothing to undo"); return; }
-    var prev = _undoStack.pop();
+  function updateUndoButtons(key) {
+    var sel = key ? '[data-action="undoKey"][data-undo-key="' + key + '"]' : '[data-action="undoKey"]';
+    var btns = document.querySelectorAll(sel);
+    for (var i = 0; i < btns.length; i++) {
+      var k = btns[i].getAttribute("data-undo-key");
+      btns[i].disabled = !(_undoStacks[k] && _undoStacks[k].length > 0);
+    }
+  }
+
+  function doUndoKey(key) {
+    if (!key || !_undoStacks[key] || _undoStacks[key].length === 0) { showToast("Nothing to undo here"); return; }
+    var prev = _undoStacks[key].pop();
     try {
       data = JSON.parse(prev);
       if (!data.flashLibrary) data.flashLibrary = [];
-      _undoLastSnapshot = null;
+      _undoPending = {};
       fullRender();
       sSet("dpv_flash_current", JSON.stringify(data));
       showToast("\u21B6 Undone");
     } catch (e) { showToast("\u26A0\uFE0F Undo failed"); }
-    updateUndoButton();
+    updateUndoButtons();
   }
 
-  // Capture the pre-edit state as soon as the user starts interacting, so the
-  // snapshot reflects the state before this batch of edits.
-  document.addEventListener("focusin", function() {
-    if (_undoLastSnapshot == null) _undoLastSnapshot = currentSnapshot();
+  // Capture the pre-edit state per key as soon as the user focuses an area.
+  document.addEventListener("focusin", function(e) {
+    var key = undoKeyFor(e.target);
+    if (key && _undoPending[key] == null) _undoPending[key] = currentSnapshot();
   });
 
-  // Auto-save
+  // Auto-save (and commit an undo snapshot for the edited area)
   var saveTimer = null;
-  document.addEventListener("input", function() {
+  document.addEventListener("input", function(e) {
+    var key = undoKeyFor(e.target);
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(function() { pushUndo(); gather(); sSet("dpv_flash_current", JSON.stringify(data)); }, 2000);
+    saveTimer = setTimeout(function() { if (key) pushUndo(key); gather(); sSet("dpv_flash_current", JSON.stringify(data)); }, 2000);
   });
 
   // --- Contacts Manager ---
@@ -3064,7 +3090,7 @@ function rewriteNarrative(idx) {
       return;
     }
     // Snapshot for undo before mutating the table
-    if (typeof pushUndo === "function") { _undoLastSnapshot = null; pushUndo(); }
+    if (typeof pushUndo === "function") { pushUndo("appendix", currentSnapshot()); }
     pasteDiv.focus();
     var sel = window.getSelection();
     sel.removeAllRanges();
@@ -3332,7 +3358,7 @@ function rewriteNarrative(idx) {
         try { inlineExcelStyles(pasteDiv); } catch (styleErr) {}
         var flattened = pasteDiv.innerHTML;
 
-        if (typeof pushUndo === "function") { _undoLastSnapshot = null; pushUndo(); }
+        if (typeof pushUndo === "function") { pushUndo("appendix", currentSnapshot()); }
         data.appendixTables[idx2].htmlFormatted = flattened;
         data.appendixTables[idx2].useFormattedView = true;
         if (textData) {
@@ -3505,7 +3531,7 @@ function rewriteNarrative(idx) {
     data.subSections.engagement = eSubs;
   }
   fullRender();
-  updateUndoButton();
+  updateUndoButtons();
   if (canStore) $("statusText").textContent = "\u2705 Saved";
   // Attach Firebase real-time listener
   attachFirebaseListener();
