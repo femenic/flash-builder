@@ -2969,26 +2969,50 @@ function rewriteNarrative(idx) {
     node.setAttribute("style", inline);
   }
 
-  // Apply a formatting command to the current selection inside a pasted table.
+  // Prevent toolbar buttons from stealing focus (and clearing the table text
+  // selection) when clicked. Color inputs are left alone so their picker opens.
+  document.addEventListener("mousedown", function(e) {
+    var b = e.target.closest && e.target.closest(".eft-btn, .eft-size");
+    if (b) e.preventDefault();
+  });
+
+  // Remember the last text selection made inside a pasted table, so it survives
+  // when focus moves to a toolbar button or the color picker (which would
+  // otherwise clear the selection before the command runs).
+  var _lastTableSelection = null; // { idx, range }
+  document.addEventListener("selectionchange", function() {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    var node = sel.anchorNode;
+    while (node) {
+      if (node.classList && node.classList.contains("paste-excel-target")) {
+        _lastTableSelection = { idx: parseInt(node.getAttribute("data-idx") || "-1", 10), range: sel.getRangeAt(0).cloneRange() };
+        return;
+      }
+      node = node.parentNode;
+    }
+  });
+
+  // Apply a formatting command to the last selection made inside a pasted table.
   // Uses execCommand for bold/italic/underline/colors (well supported), and a
   // custom span-wrap for exact px font sizes. After applying, the updated HTML
   // is saved back to the table so it persists and shows in the preview.
   function applyTableFormat(idx, cmd, value) {
     var pasteDiv = document.getElementById("pasteTarget_" + idx);
     if (!pasteDiv) return;
+    // Restore the selection captured before the toolbar took focus
+    if (!_lastTableSelection || _lastTableSelection.idx !== idx) {
+      showToast("\u26A0\uFE0F Select text in this table first, then click");
+      return;
+    }
+    pasteDiv.focus();
     var sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    sel.removeAllRanges();
+    sel.addRange(_lastTableSelection.range);
+    if (sel.isCollapsed) {
       showToast("\u26A0\uFE0F Select some text in the table first");
       return;
     }
-    // Make sure the selection is inside this table's editable area
-    var anchor = sel.anchorNode;
-    var within = false;
-    var n = anchor;
-    while (n) { if (n === pasteDiv) { within = true; break; } n = n.parentNode; }
-    if (!within) { showToast("\u26A0\uFE0F Select text inside this table first"); return; }
-
-    pasteDiv.focus();
     try { document.execCommand("styleWithCSS", false, true); } catch (e) {}
 
     if (cmd === "fontSizePx") {
@@ -3003,6 +3027,13 @@ function rewriteNarrative(idx) {
       }
     } else {
       document.execCommand(cmd, false, null);
+    }
+
+    // Keep the (possibly re-wrapped) selection so further toolbar clicks
+    // keep applying to the same text.
+    var selAfter = window.getSelection();
+    if (selAfter && selAfter.rangeCount > 0 && !selAfter.isCollapsed) {
+      _lastTableSelection = { idx: idx, range: selAfter.getRangeAt(0).cloneRange() };
     }
 
     // Persist the edited HTML
