@@ -3020,6 +3020,11 @@ function rewriteNarrative(idx) {
       wrapSelectionStyle("font-size", value + "px");
     } else if (cmd === "foreColor") {
       document.execCommand("foreColor", false, value);
+      // execCommand wraps the selection in a color span, but nested spans/font
+      // tags inside the cells may keep their own (grey) color and win. Force the
+      // color on every cell touched by the selection and strip conflicting
+      // colors from descendants so the chosen color (e.g. white) actually shows.
+      forceColorOnSelectedCells(pasteDiv, value);
     } else if (cmd === "backColor") {
       // backColor styles the text background (fill). hiliteColor is the alt name.
       if (!document.execCommand("backColor", false, value)) {
@@ -3062,6 +3067,43 @@ function rewriteNarrative(idx) {
     } catch (e) {
       // Fallback: surroundContents works only for simple ranges
       try { range.surroundContents(span); } catch (e2) {}
+    }
+  }
+
+  // Force a text color on every table cell that intersects the current
+  // selection, and clear any conflicting inline `color` on descendant nodes so
+  // the color reliably applies (fixes white text staying grey because a nested
+  // span/font kept its original color).
+  function forceColorOnSelectedCells(pasteDiv, color) {
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    var range = sel.getRangeAt(0);
+
+    function paintCell(cell) {
+      cell.style.setProperty("color", color, "important");
+      var kids = cell.querySelectorAll("*");
+      for (var k = 0; k < kids.length; k++) {
+        if (kids[k].style && kids[k].style.color) kids[k].style.setProperty("color", color, "important");
+        if (kids[k].tagName === "FONT" && kids[k].hasAttribute("color")) kids[k].setAttribute("color", color);
+      }
+    }
+
+    var cells = pasteDiv.querySelectorAll("td, th");
+    var painted = false;
+    for (var i = 0; i < cells.length; i++) {
+      var cell = cells[i];
+      var hit = false;
+      try { hit = range.intersectsNode(cell); } catch (e) { hit = false; }
+      if (hit) { paintCell(cell); painted = true; }
+    }
+    // Fallback: if intersectsNode is unsupported/failed, use the cell that
+    // contains the selection anchor.
+    if (!painted) {
+      var node = range.commonAncestorContainer;
+      while (node && node !== pasteDiv) {
+        if (node.tagName === "TD" || node.tagName === "TH") { paintCell(node); break; }
+        node = node.parentNode;
+      }
     }
   }
 
