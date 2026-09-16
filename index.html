@@ -2907,6 +2907,26 @@ function rewriteNarrative(idx) {
     }
   });
 
+  // Parse "rgb(r, g, b)" / "rgba(r, g, b, a)" into [r,g,b]; null if unparseable.
+  function parseRgb(str) {
+    if (!str) return null;
+    var m = str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (!m) return null;
+    return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+  }
+  // Relative luminance (0 = black, 1 = white).
+  function luminance(rgb) {
+    return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  }
+  // Overwrite a single inline style property on a node.
+  function setInlineProp(node, prop, value) {
+    var inline = node.getAttribute("style") || "";
+    var re = new RegExp("(^|;)\\s*" + prop + "\\s*:[^;]*;?", "i");
+    inline = inline.replace(re, "$1");
+    inline += (inline && inline.slice(-1) !== ";" ? ";" : "") + prop + ":" + value + ";";
+    node.setAttribute("style", inline);
+  }
+
   // Flatten computed styles onto every table element as inline styles.
   // Excel copies formatting mostly via class-based <style> blocks; those
   // classes collide across tables and get overridden by the app's own CSS
@@ -2953,6 +2973,23 @@ function rewriteNarrative(idx) {
         node.setAttribute("style", inline);
         // Strip Excel class refs so no stale <style> rules interfere later
         node.removeAttribute("class");
+      }
+      // Contrast fix: when getComputedStyle read the inherited dark text color
+      // (e.g. Excel white heading text defined via a class that didn't resolve
+      // inside our contenteditable), a dark cell background ends up with dark
+      // text. Detect low text/background contrast and force readable text.
+      var cells = tbl.querySelectorAll("td, th");
+      for (var ci = 0; ci < cells.length; ci++) {
+        var cell = cells[ci];
+        var ccs = window.getComputedStyle(cell);
+        var bg = parseRgb(ccs.getPropertyValue("background-color"));
+        var fg = parseRgb(ccs.getPropertyValue("color"));
+        if (!bg || !fg) continue;
+        var bgLum = luminance(bg), fgLum = luminance(fg);
+        // If background is dark and text isn't clearly light, force white text
+        if (bgLum < 0.5 && fgLum < 0.6) {
+          setInlineProp(cell, "color", "rgb(255, 255, 255)");
+        }
       }
     }
     // Remove any leftover Excel <style> blocks now that styles are inlined
