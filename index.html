@@ -206,6 +206,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .table-card-header .table-actions button { padding: 4px 10px; font-size: 11px; border-radius: 4px; border: 1px solid #ddd; background: white; cursor: pointer; }
 .table-card-header .table-actions button:hover { background: #eee; }
 .table-card-header .table-actions .del-tbl { background: #de350b; color: white; border-color: #de350b; }
+.table-card-header .table-actions .del-tbl:hover { background: #b82d0a; }
+.table-card-header .table-actions .clear-tbl { background: #fff; color: #b26a00; border-color: #e0a94a; }
+.table-card-header .table-actions .clear-tbl:hover { background: #fff6e6; }
+.table-card-header .table-actions .tbl-move { font-size: 10px; padding: 4px 8px; color: #555; }
+.table-card-header .table-actions .tbl-move:hover { border-color: #1a73e8; color: #1a73e8; background: #f0f6ff; }
 .table-card-body { padding: 16px; }
 .table-card-body .upload-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
 .table-card-body .upload-row label { font-size: 12px; color: #666; font-weight: 600; }
@@ -1033,9 +1038,12 @@ function buildSectionBody(secId) {
         h += '<span class="table-link-badge">Linked: ' + esc(plName) + '</span>';
       }
       h += '<div class="table-actions">';
+      if (i > 0) h += '<button data-action="moveTableUp" data-idx="' + i + '" class="tbl-move" title="Move table up">&#9650;</button>';
+      if (i < data.appendixTables.length - 1) h += '<button data-action="moveTableDown" data-idx="' + i + '" class="tbl-move" title="Move table down">&#9660;</button>';
       h += '<button data-action="linkTable" data-idx="' + i + '">Link to Product</button>';
       h += '<button data-action="parseTblToProduct" data-idx="' + i + '">Fill Metrics</button>';
-      h += '<button data-action="removeTable" data-idx="' + i + '" class="del-tbl">Delete</button>';
+      h += '<button data-action="clearTable" data-idx="' + i + '" class="clear-tbl" title="Empty this table so you can paste fresh data">Clear contents</button>';
+      h += '<button data-action="removeTable" data-idx="' + i + '" class="del-tbl" title="Remove this whole table">Delete table</button>';
       h += '</div></div>';
       h += '<div class="table-card-body">';
       // Paste from Excel (preserves formatting)
@@ -1542,14 +1550,7 @@ function buildSectionBody(secId) {
         for (var esi3 = 0; esi3 < eSubs3.length; esi3++) {
           var esub3 = eSubs3[esi3];
           if (esub3.title || esub3.content) {
-            var statusBadge = "";
-            if (secId === "derisking" && esub3.status) {
-              var badgeCol = esub3.status === "green" ? "#276749" : (esub3.status === "amber" ? "#b7791f" : "#c53030");
-              var badgeBg = esub3.status === "green" ? "#c6f6d5" : (esub3.status === "amber" ? "#fefcbf" : "#fed7d7");
-              var badgeLabel = esub3.status === "green" ? "\u{1F7E2} GREEN" : (esub3.status === "amber" ? "\u{1F7E1} AMBER" : "\u{1F534} RED");
-              statusBadge = ' <span style="background:' + badgeBg + ';color:' + badgeCol + ';font-weight:700;padding:2px 8px;border-radius:3px;font-size:11px;">' + badgeLabel + '</span>';
-            }
-            email += '<tr><td style="padding:' + (esi3 === 0 ? '16px' : '0 16px 16px') + ';"><p style="font-size:14px;font-weight:600;color:#222;margin:0 0 6px;">' + esc(esub3.title || "Sub-section") + statusBadge + '</p>';
+            email += '<tr><td style="padding:' + (esi3 === 0 ? '16px' : '0 16px 16px') + ';"><p style="font-size:14px;font-weight:600;color:#222;margin:0 0 6px;">' + esc(esub3.title || "Sub-section") + '</p>';
             // Highlight status words in content
             var subContentHtml = esub3.content ? esc(esub3.content) : '<em style="color:#999;">No update</em>';
             subContentHtml = subContentHtml.replace(/\bGreen\b/g, '<strong style="color:#276749;background:#c6f6d5;padding:1px 4px;border-radius:2px;">GREEN</strong>');
@@ -1755,7 +1756,10 @@ function buildSectionBody(secId) {
     else if (action === "addEng") { data.engagementItems.push({ name: "New Category", content: "" }); renderEngagement(); }
     else if (action === "moveUp" && idx > 0) { var tmp = data.sectionOrder[idx]; data.sectionOrder[idx] = data.sectionOrder[idx-1]; data.sectionOrder[idx-1] = tmp; gather(); renderSections(); renderSectionOrder(); }
     else if (action === "addTable") { if (!data.appendixTables) data.appendixTables = []; data.appendixTables.push({ title: "Table " + (data.appendixTables.length + 1) + ": ", raw: "", grid: [], linkedProduct: null }); renderAppendixTables(); }
-    else if (action === "removeTable") { data.appendixTables.splice(idx, 1); renderAppendixTables(); }
+    else if (action === "removeTable") { if (confirm("Delete this whole table?")) { data.appendixTables.splice(idx, 1); renderAppendixTables(); } }
+    else if (action === "clearTable") { var tblC = data.appendixTables[idx]; if (tblC) { tblC.raw = ""; tblC.grid = []; tblC.htmlFormatted = ""; tblC.useFormattedView = false; tblC.colAligns = []; tblC.colFontSizes = []; tblC.colBold = []; renderAppendixTables(); showToast("Table cleared \u2014 paste fresh data"); } }
+    else if (action === "moveTableUp" && idx > 0) { var mt = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx - 1, 0, mt); renderAppendixTables(); }
+    else if (action === "moveTableDown" && idx < data.appendixTables.length - 1) { var mtd = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx + 1, 0, mtd); renderAppendixTables(); }
     else if (action === "renderTableGrid") { var tbl = data.appendixTables[idx]; tbl.grid = parseRawToGrid(tbl.raw); renderAppendixTables(); }
     else if (action === "parseTblToProduct") { fillProductFromTable(idx); }
     else if (action === "toggleEditMode") { var tbl9 = data.appendixTables[idx]; if (tbl9) { tbl9.useFormattedView = false; renderAppendixTables(); } }
