@@ -3024,7 +3024,9 @@ function rewriteNarrative(idx) {
       // tags inside the cells may keep their own (grey) color and win. Force the
       // color on every cell touched by the selection and strip conflicting
       // colors from descendants so the chosen color (e.g. white) actually shows.
-      forceColorOnSelectedCells(pasteDiv, value);
+      // Pass the saved range too: opening the native color picker can collapse
+      // the live selection, so we rely on the captured range to find cells.
+      forceColorOnSelectedCells(pasteDiv, value, _lastTableSelection && _lastTableSelection.range);
     } else if (cmd === "backColor") {
       // backColor styles the text background (fill). hiliteColor is the alt name.
       if (!document.execCommand("backColor", false, value)) {
@@ -3074,16 +3076,21 @@ function rewriteNarrative(idx) {
   // selection, and clear any conflicting inline `color` on descendant nodes so
   // the color reliably applies (fixes white text staying grey because a nested
   // span/font kept its original color).
-  function forceColorOnSelectedCells(pasteDiv, color) {
-    var sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    var range = sel.getRangeAt(0);
+  function forceColorOnSelectedCells(pasteDiv, color, savedRange) {
+    // Prefer the saved range (survives the native color picker); fall back to
+    // the live selection.
+    var range = savedRange || null;
+    if (!range) {
+      var sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) range = sel.getRangeAt(0);
+    }
+    if (!range) return;
 
     function paintCell(cell) {
       cell.style.setProperty("color", color, "important");
       var kids = cell.querySelectorAll("*");
       for (var k = 0; k < kids.length; k++) {
-        if (kids[k].style && kids[k].style.color) kids[k].style.setProperty("color", color, "important");
+        if (kids[k].style) kids[k].style.setProperty("color", color, "important");
         if (kids[k].tagName === "FONT" && kids[k].hasAttribute("color")) kids[k].setAttribute("color", color);
       }
     }
@@ -3096,13 +3103,21 @@ function rewriteNarrative(idx) {
       try { hit = range.intersectsNode(cell); } catch (e) { hit = false; }
       if (hit) { paintCell(cell); painted = true; }
     }
-    // Fallback: if intersectsNode is unsupported/failed, use the cell that
-    // contains the selection anchor.
+    // Fallback: use the cell that contains the range's common ancestor.
     if (!painted) {
       var node = range.commonAncestorContainer;
       while (node && node !== pasteDiv) {
-        if (node.tagName === "TD" || node.tagName === "TH") { paintCell(node); break; }
+        if (node.tagName === "TD" || node.tagName === "TH") { paintCell(node); painted = true; break; }
         node = node.parentNode;
+      }
+    }
+    // Last resort: if the range's ancestor is the whole table/row, paint the
+    // cells within the ancestor.
+    if (!painted) {
+      var anc = range.commonAncestorContainer;
+      if (anc.nodeType === 1) {
+        var innerCells = anc.querySelectorAll ? anc.querySelectorAll("td, th") : [];
+        for (var j = 0; j < innerCells.length; j++) paintCell(innerCells[j]);
       }
     }
   }
