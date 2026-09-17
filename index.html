@@ -136,7 +136,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .field-group textarea:focus, .field-group input:focus { outline: none; border-color: #1a73e8; }
 .field-group textarea { min-height: 80px; }
 /* Auto-growing narrative textareas: grow to fit content, no inner scrollbar */
-.narrative-section textarea { overflow: hidden; resize: none; min-height: 60px; }
+.narrative-section textarea, .subsection-content,
+textarea[data-field="plNotes"], textarea[data-field="engContent"], textarea[data-field="subContent"] { overflow: hidden; resize: none; min-height: 60px; }
 .help-text { font-size: 11px; color: #999; margin-top: 4px; font-style: italic; }
 
 /* Product lines - new layout */
@@ -345,12 +346,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 /* Narrative rewrite */
 .narrative-section { position: relative; }
-/* Rewrite button sits in normal flow (right-aligned) above the textarea so it
-   never overlaps the narrative text. */
-.narrative-section .rewrite-btn { display: inline-block; float: right; margin: 0 0 6px 8px; padding: 4px 12px; font-size: 11px; border-radius: 4px; border: 1px solid #0d8043; background: #e6f4ea; color: #0d8043; cursor: pointer; font-weight: 600; }
+/* Header row (label + rewrite button) sits above the textarea in normal flow,
+   so nothing overlaps the text. */
+.narrative-section .field-group { display: flex; flex-direction: column; }
+.narrative-section .field-group label { order: 0; }
+.narrative-section .rewrite-btn { order: 1; align-self: flex-end; margin: 0 0 6px 0; padding: 4px 12px; font-size: 11px; border-radius: 4px; border: 1px solid #0d8043; background: #e6f4ea; color: #0d8043; cursor: pointer; font-weight: 600; }
 .narrative-section .rewrite-btn:hover { background: #ceead6; }
-.narrative-section .field-group label { float: left; }
-.narrative-section .field-group textarea { clear: both; }
+.narrative-section .field-group textarea { order: 2; }
 .rewritten-output { background: #f0f8f4; border: 1px solid #b7dfca; border-radius: 4px; padding: 12px; margin-top: 8px; font-size: 13px; line-height: 1.6; color: #222; display: none; position: relative; }
 .progress-flag { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; border: 1px solid #ddd; cursor: pointer; appearance: none; -webkit-appearance: none; margin-left: 8px; }
 .progress-flag.progress-not_started { background: #f5f5f5; color: #888; border-color: #ddd; }
@@ -990,7 +992,11 @@ function buildSectionBody(secId) {
     renderAppendixTables();
     populateFields();
     if (typeof updateUndoButtons === "function") updateUndoButtons();
-    if (typeof autoGrowAll === "function") autoGrowAll();
+    // Defer to next frame so the browser has laid out the textareas before we
+    // measure scrollHeight (measuring too early yields wrong/zero heights).
+    if (typeof autoGrowAll === "function") {
+      requestAnimationFrame(function() { autoGrowAll(); });
+    }
   }
 
   function populateFields() {
@@ -2754,22 +2760,28 @@ function rewriteNarrative(idx) {
     if (key && _undoPending[key] == null) _undoPending[key] = currentSnapshot();
   });
 
-  // Auto-grow narrative textareas to fit their content (no inner scrollbar).
+  // Auto-grow a textarea to fit its content (no inner scrollbar). Skips hidden
+  // elements (scrollHeight is unreliable when the element isn't laid out).
   function autoGrow(el) {
-    if (!el) return;
+    if (!el || el.tagName !== "TEXTAREA") return;
+    if (el.offsetParent === null) return; // not visible (collapsed section)
     el.style.height = "auto";
-    el.style.height = (el.scrollHeight + 2) + "px";
+    var h = el.scrollHeight;
+    if (h > 0) el.style.height = (h + 4) + "px";
   }
   function autoGrowAll() {
-    var tas = document.querySelectorAll(".narrative-section textarea");
+    // Cover every narrative textarea, matched broadly so all section types grow.
+    var tas = document.querySelectorAll(".narrative-section textarea, .subsection-content, textarea[data-field='plNotes'], textarea[data-field='engContent'], textarea[data-field='subContent']");
     for (var i = 0; i < tas.length; i++) autoGrow(tas[i]);
   }
+  // Recompute sizes when the window changes.
+  window.addEventListener("resize", function() { if (typeof autoGrowAll === "function") autoGrowAll(); });
 
   // Auto-save (and commit an undo snapshot for the edited area)
   var saveTimer = null;
   document.addEventListener("input", function(e) {
     // Grow narrative textareas as the user types
-    if (e.target && e.target.tagName === "TEXTAREA" && e.target.closest && e.target.closest(".narrative-section")) {
+    if (e.target && e.target.tagName === "TEXTAREA") {
       autoGrow(e.target);
     }
     var key = undoKeyFor(e.target);
