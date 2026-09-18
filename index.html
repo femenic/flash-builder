@@ -316,6 +316,9 @@ textarea[data-field="plNotes"], textarea[data-field="engContent"], textarea[data
 .excel-fmt-toolbar .eft-scale-group { display: inline-flex; align-items: center; gap: 5px; }
 .excel-fmt-toolbar .eft-scale { width: 90px; cursor: pointer; }
 .excel-fmt-toolbar .eft-scale-val { font-size: 11px; color: #555; min-width: 34px; text-align: right; }
+.tbl-scale-wrap { position: relative; }
+.tbl-resize-handle { position: absolute; right: -2px; bottom: -2px; width: 16px; height: 16px; background: #1a73e8; border: 2px solid #fff; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); cursor: nwse-resize; z-index: 5; }
+.tbl-resize-handle:hover { background: #0d5bcd; }
 .paste-excel-target { min-height: 80px; border: 2px dashed #bbb; border-radius: 0 0 6px 6px; padding: 12px; background: white; overflow-x: auto; cursor: text; transition: border-color 0.2s; }
 .paste-excel-target:focus { outline: none; border-color: #1a73e8; border-style: solid; }
 .paste-excel-target .paste-placeholder { color: #999; font-size: 13px; font-style: italic; }
@@ -1236,6 +1239,8 @@ function buildSectionBody(secId) {
       if (tbl) {
         tbl.style.transformOrigin = "top left";
         tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
+        var wrap = tbl.parentNode;
+        if (wrap && wrap.classList && wrap.classList.contains("tbl-scale-wrap")) sizeScaleWrap(wrap, tbl, scale);
       }
     }
     var lbl = document.getElementById("scaleVal_" + idx);
@@ -1245,7 +1250,8 @@ function buildSectionBody(secId) {
   }
 
   // Apply each table's saved scale to the table shown in its paste target
-  // (like resizing an image — the whole table shrinks/grows proportionally).
+  // (like resizing an image — the whole table shrinks/grows proportionally),
+  // and add a drag handle at the bottom-right corner to resize by dragging.
   function applyTableScales() {
     if (!data.appendixTables) return;
     for (var i = 0; i < data.appendixTables.length; i++) {
@@ -1253,14 +1259,112 @@ function buildSectionBody(secId) {
       var pd = document.getElementById("pasteTarget_" + i);
       if (!pd) continue;
       var tbl = pd.querySelector("table");
-      if (tbl) {
-        tbl.style.transformOrigin = "top left";
-        tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
-        // Reserve layout space so the scaled table doesn't overlap siblings
-        pd.style.overflow = "auto";
+      if (!tbl) continue;
+      tbl.style.transformOrigin = "top left";
+      tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
+      pd.style.overflow = "auto";
+
+      // Wrap the table so we can position a resize handle over its corner.
+      var wrap = tbl.parentNode;
+      if (!wrap || !wrap.classList || !wrap.classList.contains("tbl-scale-wrap")) {
+        wrap = document.createElement("div");
+        wrap.className = "tbl-scale-wrap";
+        wrap.style.position = "relative";
+        wrap.style.display = "inline-block";
+        tbl.parentNode.insertBefore(wrap, tbl);
+        wrap.appendChild(tbl);
+      }
+      // (Re)size the wrapper to the scaled table footprint so the handle sits
+      // at the visible bottom-right corner and siblings don't overlap.
+      sizeScaleWrap(wrap, tbl, scale);
+
+      if (!wrap.querySelector(".tbl-resize-handle")) {
+        var handle = document.createElement("div");
+        handle.className = "tbl-resize-handle";
+        handle.title = "Drag to resize the table";
+        handle.setAttribute("data-idx", String(i));
+        wrap.appendChild(handle);
       }
     }
   }
+
+  // Return the clean stored HTML for a paste target: the table with its scale
+  // transform, but WITHOUT the resize wrapper/handle we inject for the editor.
+  function extractTableHtml(pd) {
+    if (!pd) return "";
+    var clone = pd.cloneNode(true);
+    // Remove the drag handle
+    var handles = clone.querySelectorAll(".tbl-resize-handle");
+    for (var i = 0; i < handles.length; i++) handles[i].parentNode.removeChild(handles[i]);
+    // Unwrap the scale wrappers (keep the table, drop the wrapper div)
+    var wraps = clone.querySelectorAll(".tbl-scale-wrap");
+    for (var w = 0; w < wraps.length; w++) {
+      var wr = wraps[w];
+      while (wr.firstChild) wr.parentNode.insertBefore(wr.firstChild, wr);
+      wr.parentNode.removeChild(wr);
+    }
+    // Strip the scale transform: the scale is stored separately in tbl.scale
+    // (single source of truth) and re-applied on render, so we must not bake it
+    // into the saved HTML too, or it would double-apply.
+    var tbls = clone.querySelectorAll("table");
+    for (var ti = 0; ti < tbls.length; ti++) { tbls[ti].style.transform = ""; tbls[ti].style.transformOrigin = ""; }
+    return clone.innerHTML;
+  }
+
+  // Match the wrapper box to the on-screen (scaled) size of the table, so the
+  // layout reserves the right space and the handle sits at the corner.
+  function sizeScaleWrap(wrap, tbl, scale) {
+    // Temporarily read the unscaled size
+    var prev = tbl.style.transform;
+    tbl.style.transform = "";
+    var w = tbl.offsetWidth, h = tbl.offsetHeight;
+    tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
+    wrap.style.width = (w * scale) + "px";
+    wrap.style.height = (h * scale) + "px";
+  }
+
+  // --- Drag-to-resize a table by its corner handle ---
+  (function () {
+    var dragging = null; // { idx, startX, startY, startScale, baseW, baseH, wrap, tbl }
+    document.addEventListener("mousedown", function (e) {
+      var handle = e.target.closest && e.target.closest(".tbl-resize-handle");
+      if (!handle) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var idx = parseInt(handle.getAttribute("data-idx") || "0", 10);
+      var pd = document.getElementById("pasteTarget_" + idx);
+      var tbl = pd ? pd.querySelector("table") : null;
+      var wrap = handle.parentNode;
+      if (!tbl) return;
+      var startScale = (data.appendixTables[idx] && data.appendixTables[idx].scale) || 1;
+      // Base (unscaled) width for computing new scale from drag distance
+      var prev = tbl.style.transform; tbl.style.transform = "";
+      var baseW = tbl.offsetWidth || 1;
+      tbl.style.transform = prev;
+      dragging = { idx: idx, startX: e.clientX, startScale: startScale, baseW: baseW, wrap: wrap, tbl: tbl };
+      // Snapshot once at drag start for undo
+      if (typeof pushUndo === "function") pushUndo("appendix", currentSnapshot());
+      document.body.style.userSelect = "none";
+    });
+    document.addEventListener("mousemove", function (e) {
+      if (!dragging) return;
+      var dx = e.clientX - dragging.startX;
+      // New on-screen width -> new scale, relative to the unscaled base width
+      var newWidth = (dragging.baseW * dragging.startScale) + dx;
+      var newScale = newWidth / dragging.baseW;
+      newScale = Math.max(0.3, Math.min(1.5, Math.round(newScale * 100) / 100));
+      if (data.appendixTables[dragging.idx]) data.appendixTables[dragging.idx].scale = newScale;
+      setTableScaleLive(dragging.idx, newScale);
+      sizeScaleWrap(dragging.wrap, dragging.tbl, newScale);
+    });
+    document.addEventListener("mouseup", function () {
+      if (!dragging) return;
+      var idx = dragging.idx;
+      dragging = null;
+      document.body.style.userSelect = "";
+      gather(); sSet("dpv_flash_current", JSON.stringify(data));
+    });
+  })();
 
   function parseRawToGrid(raw) {
     if (!raw || !raw.trim()) return [];
@@ -2752,7 +2856,7 @@ function rewriteNarrative(idx) {
     if (t && t.classList && t.classList.contains("paste-excel-target")) {
       var pIdx = parseInt(t.getAttribute("data-idx") || "-1", 10);
       if (pIdx >= 0 && data.appendixTables[pIdx] && t.querySelector("table")) {
-        data.appendixTables[pIdx].htmlFormatted = t.innerHTML;
+        data.appendixTables[pIdx].htmlFormatted = extractTableHtml(t);
         data.appendixTables[pIdx].useFormattedView = true;
         gather(); sSet("dpv_flash_current", JSON.stringify(data));
       }
@@ -3291,7 +3395,7 @@ function rewriteNarrative(idx) {
 
     // Persist the edited HTML
     if (data.appendixTables[idx]) {
-      data.appendixTables[idx].htmlFormatted = pasteDiv.innerHTML;
+      data.appendixTables[idx].htmlFormatted = extractTableHtml(pasteDiv);
       data.appendixTables[idx].useFormattedView = true;
       gather(); sSet("dpv_flash_current", JSON.stringify(data));
     }
