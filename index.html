@@ -312,6 +312,10 @@ textarea[data-field="plNotes"], textarea[data-field="engContent"], textarea[data
 .excel-fmt-toolbar .eft-size { height: 28px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; padding: 0 4px; cursor: pointer; }
 .excel-fmt-toolbar .eft-color { display: inline-flex; align-items: center; gap: 2px; height: 28px; border: 1px solid #ccc; border-radius: 4px; padding: 0 5px; background: #fff; cursor: pointer; font-size: 13px; font-weight: 700; }
 .excel-fmt-toolbar .eft-color input[type="color"] { width: 20px; height: 20px; border: none; padding: 0; background: none; cursor: pointer; }
+.excel-fmt-toolbar .eft-sep { width: 1px; height: 22px; background: #ccc; margin: 0 4px; }
+.excel-fmt-toolbar .eft-scale-group { display: inline-flex; align-items: center; gap: 5px; }
+.excel-fmt-toolbar .eft-scale { width: 90px; cursor: pointer; }
+.excel-fmt-toolbar .eft-scale-val { font-size: 11px; color: #555; min-width: 34px; text-align: right; }
 .paste-excel-target { min-height: 80px; border: 2px dashed #bbb; border-radius: 0 0 6px 6px; padding: 12px; background: white; overflow-x: auto; cursor: text; transition: border-color 0.2s; }
 .paste-excel-target:focus { outline: none; border-color: #1a73e8; border-style: solid; }
 .paste-excel-target .paste-placeholder { color: #999; font-size: 13px; font-style: italic; }
@@ -1110,6 +1114,15 @@ function buildSectionBody(secId) {
       h += '<label class="eft-color" title="Text color">A<input type="color" data-action="eftTextColor" data-idx="' + i + '" value="#000000" /></label>';
       h += '<label class="eft-color eft-fill" title="Fill / background color">&#9632;<input type="color" data-action="eftFillColor" data-idx="' + i + '" value="#ffff00" /></label>';
       h += '<button class="eft-btn" data-action="eftTextWhite" data-idx="' + i + '" title="White text">A<span style="color:#fff;background:#333;padding:0 3px;border-radius:2px;">W</span></button>';
+      // Resize / scale the whole table like an image
+      var tblScale = Math.round((tbl.scale || 1) * 100);
+      h += '<span class="eft-sep"></span>';
+      h += '<span class="eft-scale-group" title="Resize the whole table">';
+      h += '<button class="eft-btn" data-action="tblScaleDown" data-idx="' + i + '" title="Smaller">\u2212</button>';
+      h += '<input type="range" class="eft-scale" data-action="tblScaleSet" data-idx="' + i + '" min="30" max="150" step="5" value="' + tblScale + '" />';
+      h += '<button class="eft-btn" data-action="tblScaleUp" data-idx="' + i + '" title="Bigger">+</button>';
+      h += '<span class="eft-scale-val" id="scaleVal_' + i + '">' + tblScale + '%</span>';
+      h += '</span>';
       h += '</div>';
       h += '<div class="paste-excel-target" contenteditable="true" data-action="pasteExcel" data-idx="' + i + '" id="pasteTarget_' + i + '">';
       if (tbl.htmlFormatted && tbl.useFormattedView) h += tbl.htmlFormatted;
@@ -1211,6 +1224,42 @@ function buildSectionBody(secId) {
       h += '<p style="color:#999;font-size:13px;text-align:center;padding:20px;">No tables yet. Click "+ Add Table" to create one.</p>';
     }
     c.innerHTML = h;
+    applyTableScales();
+  }
+
+  // Live-update a single table's scale without a full re-render (keeps the
+  // slider smooth). Updates the transform, the % label, and the slider value.
+  function setTableScaleLive(idx, scale) {
+    var pd = document.getElementById("pasteTarget_" + idx);
+    if (pd) {
+      var tbl = pd.querySelector("table");
+      if (tbl) {
+        tbl.style.transformOrigin = "top left";
+        tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
+      }
+    }
+    var lbl = document.getElementById("scaleVal_" + idx);
+    if (lbl) lbl.textContent = Math.round(scale * 100) + "%";
+    var sld = document.querySelector('.eft-scale[data-idx="' + idx + '"]');
+    if (sld) sld.value = Math.round(scale * 100);
+  }
+
+  // Apply each table's saved scale to the table shown in its paste target
+  // (like resizing an image — the whole table shrinks/grows proportionally).
+  function applyTableScales() {
+    if (!data.appendixTables) return;
+    for (var i = 0; i < data.appendixTables.length; i++) {
+      var scale = data.appendixTables[i].scale || 1;
+      var pd = document.getElementById("pasteTarget_" + i);
+      if (!pd) continue;
+      var tbl = pd.querySelector("table");
+      if (tbl) {
+        tbl.style.transformOrigin = "top left";
+        tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
+        // Reserve layout space so the scaled table doesn't overlap siblings
+        pd.style.overflow = "auto";
+      }
+    }
   }
 
   function parseRawToGrid(raw) {
@@ -1631,8 +1680,13 @@ function buildSectionBody(secId) {
         var atbl = data.appendixTables[ti];
         email += '<p style="font-size:13px;font-weight:600;color:#333;margin:12px 0 6px;">' + esc(atbl.title || "Table " + (ti+1)) + '</p>';
         if (atbl.htmlFormatted) {
-          // Use exact Excel-formatted HTML
-          email += atbl.htmlFormatted;
+          // Use exact Excel-formatted HTML, wrapped so a saved scale shrinks/
+          // grows the whole table like an image.
+          if (atbl.scale && atbl.scale !== 1) {
+            email += '<div style="transform:scale(' + atbl.scale + ');transform-origin:top left;">' + atbl.htmlFormatted + '</div>';
+          } else {
+            email += atbl.htmlFormatted;
+          }
         } else if (atbl.grid && atbl.grid.length > 0) {
           email += '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:' + fs + ';margin-bottom:12px;width:100%;">';
           for (var tri = 0; tri < atbl.grid.length; tri++) {
@@ -1836,6 +1890,16 @@ function buildSectionBody(secId) {
     else if (action === "addTable") { if (!data.appendixTables) data.appendixTables = []; data.appendixTables.push({ title: "Table " + (data.appendixTables.length + 1) + ": ", raw: "", grid: [], linkedProduct: null }); renderAppendixTables(); }
     else if (action === "removeTable") { if (confirm("Delete this whole table?")) { pushUndo("appendix", currentSnapshot()); data.appendixTables.splice(idx, 1); renderAppendixTables(); } }
     else if (action === "clearTable") { var tblC = data.appendixTables[idx]; if (tblC) { pushUndo("appendix", currentSnapshot()); tblC.raw = ""; tblC.grid = []; tblC.htmlFormatted = ""; tblC.useFormattedView = false; tblC.colAligns = []; tblC.colFontSizes = []; tblC.colBold = []; renderAppendixTables(); showToast("Table cleared \u2014 paste fresh data"); } }
+    else if (action === "tblScaleUp" || action === "tblScaleDown") {
+      var tS = data.appendixTables[idx]; if (!tS) return;
+      pushUndo("appendix", currentSnapshot());
+      var cur = tS.scale || 1;
+      cur = action === "tblScaleUp" ? cur + 0.05 : cur - 0.05;
+      cur = Math.max(0.3, Math.min(1.5, Math.round(cur * 100) / 100));
+      tS.scale = cur;
+      setTableScaleLive(idx, cur);
+      gather(); sSet("dpv_flash_current", JSON.stringify(data));
+    }
     else if (action === "moveTableUp" && idx > 0) { pushUndo("appendix", currentSnapshot()); var mt = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx - 1, 0, mt); renderAppendixTables(); }
     else if (action === "moveTableDown" && idx < data.appendixTables.length - 1) { pushUndo("appendix", currentSnapshot()); var mtd = data.appendixTables.splice(idx, 1)[0]; data.appendixTables.splice(idx + 1, 0, mtd); renderAppendixTables(); }
     else if (action === "eftBold") { applyTableFormat(idx, "bold"); }
@@ -2783,6 +2847,12 @@ function rewriteNarrative(idx) {
     // Grow narrative textareas as the user types
     if (e.target && e.target.tagName === "TEXTAREA") {
       autoGrow(e.target);
+    }
+    // Live table resize while dragging the scale slider
+    if (e.target && e.target.getAttribute && e.target.getAttribute("data-action") === "tblScaleSet") {
+      var sIdx = parseInt(e.target.getAttribute("data-idx") || "0", 10);
+      var sVal = (parseInt(e.target.value, 10) || 100) / 100;
+      if (data.appendixTables[sIdx]) { data.appendixTables[sIdx].scale = sVal; setTableScaleLive(sIdx, sVal); }
     }
     var key = undoKeyFor(e.target);
     if (saveTimer) clearTimeout(saveTimer);
