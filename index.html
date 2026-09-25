@@ -1732,15 +1732,16 @@ function buildSectionBody(secId) {
     }
 
     var email = '<table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-family:' + font + ';font-size:' + fs + ';">';
-    // Optional subscribe banner at the very top
+    // Title header
+    email += '<tr><td style="background:' + hdrCol + ';color:white;padding:20px 24px;">';
+    email += '<p style="margin:0;font-size:20px;font-weight:600;">' + emoji + ' DPV Safety Controls - flash update</p>';
+    email += '<p style="margin:6px 0 0;font-size:14px;opacity:0.85;">' + wkLabel + ' | ' + esc(progName) + '</p></td></tr>';
+    // Optional subscribe banner — placed right below the title header
     var bccBanner = (data.bccText != null && data.bccText.trim() !== "") ? data.bccText.trim() : "";
     if (bccBanner) {
       var bccHtml = esc(bccBanner).replace(/([\w.+-]+@[\w.-]+\.[A-Za-z]{2,})/, '<a href="mailto:$1" style="color:#946f00;text-decoration:underline;">$1</a>');
       email += '<tr><td style="background:#fbf7e9;border-bottom:1px solid #ece3c4;padding:8px 24px;text-align:center;font-size:12px;color:#7a6100;">' + bccHtml + '</td></tr>';
     }
-    email += '<tr><td style="background:' + hdrCol + ';color:white;padding:20px 24px;">';
-    email += '<p style="margin:0;font-size:20px;font-weight:600;">' + emoji + ' DPV Safety Controls - flash update</p>';
-    email += '<p style="margin:6px 0 0;font-size:14px;opacity:0.85;">' + wkLabel + ' | ' + esc(progName) + '</p></td></tr>';
     email += '<tr><td style="padding:20px 24px;"><p style="color:#555;font-size:12px;margin:0 0 4px;">INTERNAL ONLY</p>';
     email += '<p style="color:#333;font-size:' + fs + ';line-height:1.5;margin:0;">This is an update on the Programme and enforcement status for Safety Controls via Direct Product Validation (DPV) flow. The scope stands at <strong>' + (data.gmsScope || "$__B GMS") + '</strong>.</p></td></tr>';
 
