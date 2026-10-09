@@ -1804,12 +1804,12 @@ function buildSectionBody(secId) {
         var atbl = data.appendixTables[ti];
         email += '<p style="font-size:13px;font-weight:600;color:#333;margin:12px 0 6px;">' + esc(atbl.title || "Table " + (ti+1)) + '</p>';
         if (atbl.htmlFormatted) {
-          // Use exact Excel-formatted HTML, wrapped so a saved scale shrinks/
-          // grows the whole table like an image.
+          // Use exact Excel-formatted HTML. Wrap in a horizontally-scrollable
+          // box so wide tables aren't cut off, and apply any saved scale.
           if (atbl.scale && atbl.scale !== 1) {
-            email += '<div style="transform:scale(' + atbl.scale + ');transform-origin:top left;">' + atbl.htmlFormatted + '</div>';
+            email += '<div style="max-width:100%;overflow-x:auto;"><div style="display:inline-block;transform:scale(' + atbl.scale + ');transform-origin:top left;">' + atbl.htmlFormatted + '</div></div>';
           } else {
-            email += atbl.htmlFormatted;
+            email += '<div style="max-width:100%;overflow-x:auto;">' + atbl.htmlFormatted + '</div>';
           }
         } else if (atbl.grid && atbl.grid.length > 0) {
           email += '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:' + fs + ';margin-bottom:12px;width:100%;">';
