@@ -1805,11 +1805,13 @@ function buildSectionBody(secId) {
         email += '<p style="font-size:13px;font-weight:600;color:#333;margin:12px 0 6px;">' + esc(atbl.title || "Table " + (ti+1)) + '</p>';
         if (atbl.htmlFormatted) {
           // Use exact Excel-formatted HTML. Wrap in a horizontally-scrollable
-          // box so wide tables aren't cut off, and apply any saved scale.
+          // box so wide tables aren't cut off, and apply any saved scale using
+          // `zoom` (not transform) so the layout reserves the real scaled size
+          // and the content below doesn't overlap it.
           if (atbl.scale && atbl.scale !== 1) {
-            email += '<div style="max-width:100%;overflow-x:auto;"><div style="display:inline-block;transform:scale(' + atbl.scale + ');transform-origin:top left;">' + atbl.htmlFormatted + '</div></div>';
+            email += '<div style="max-width:100%;overflow-x:auto;margin-bottom:12px;"><div style="zoom:' + atbl.scale + ';">' + atbl.htmlFormatted + '</div></div>';
           } else {
-            email += '<div style="max-width:100%;overflow-x:auto;">' + atbl.htmlFormatted + '</div>';
+            email += '<div style="max-width:100%;overflow-x:auto;margin-bottom:12px;">' + atbl.htmlFormatted + '</div>';
           }
         } else if (atbl.grid && atbl.grid.length > 0) {
           email += '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-size:' + fs + ';margin-bottom:12px;width:100%;">';
