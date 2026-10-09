@@ -1240,15 +1240,12 @@ function buildSectionBody(secId) {
   // Live-update a single table's scale without a full re-render (keeps the
   // slider smooth). Updates the transform, the % label, and the slider value.
   function setTableScaleLive(idx, scale) {
-    var pd = document.getElementById("pasteTarget_" + idx);
-    if (pd) {
-      var tbl = pd.querySelector("table");
-      if (tbl) {
-        tbl.style.transformOrigin = "top left";
-        tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
-        var wrap = tbl.parentNode;
-        if (wrap && wrap.classList && wrap.classList.contains("tbl-scale-wrap")) sizeScaleWrap(wrap, tbl, scale);
-      }
+    var tbl = scalableTableFor(idx);
+    if (tbl) {
+      tbl.style.transformOrigin = "top left";
+      tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
+      var wrap = tbl.parentNode;
+      if (wrap && wrap.classList && wrap.classList.contains("tbl-scale-wrap")) sizeScaleWrap(wrap, tbl, scale);
     }
     var lbl = document.getElementById("scaleVal_" + idx);
     if (lbl) lbl.textContent = Math.round(scale * 100) + "%";
@@ -1259,17 +1256,25 @@ function buildSectionBody(secId) {
   // Apply each table's saved scale to the table shown in its paste target
   // (like resizing an image — the whole table shrinks/grows proportionally),
   // and add a drag handle at the bottom-right corner to resize by dragging.
+  // Find the scalable table for a card: the pasted Excel table if present,
+  // otherwise the editable grid table (so grid-mode tables resize too).
+  function scalableTableFor(i) {
+    var pd = document.getElementById("pasteTarget_" + i);
+    var tbl = pd ? pd.querySelector("table") : null;
+    if (tbl) return tbl;
+    return document.getElementById("tblGrid_" + i);
+  }
+
   function applyTableScales() {
     if (!data.appendixTables) return;
     for (var i = 0; i < data.appendixTables.length; i++) {
       var scale = data.appendixTables[i].scale || 1;
-      var pd = document.getElementById("pasteTarget_" + i);
-      if (!pd) continue;
-      var tbl = pd.querySelector("table");
+      var tbl = scalableTableFor(i);
       if (!tbl) continue;
       tbl.style.transformOrigin = "top left";
       tbl.style.transform = scale === 1 ? "" : "scale(" + scale + ")";
-      pd.style.overflow = "auto";
+      var pdHost = tbl.closest(".paste-excel-target, .table-grid-wrapper");
+      if (pdHost) pdHost.style.overflow = "auto";
 
       // Wrap the table so we can position a resize handle over its corner.
       var wrap = tbl.parentNode;
@@ -1339,8 +1344,7 @@ function buildSectionBody(secId) {
       e.preventDefault();
       e.stopPropagation();
       var idx = parseInt(handle.getAttribute("data-idx") || "0", 10);
-      var pd = document.getElementById("pasteTarget_" + idx);
-      var tbl = pd ? pd.querySelector("table") : null;
+      var tbl = scalableTableFor(idx);
       var wrap = handle.parentNode;
       if (!tbl) return;
       var startScale = (data.appendixTables[idx] && data.appendixTables[idx].scale) || 1;
